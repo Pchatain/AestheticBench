@@ -1,6 +1,12 @@
 # Environment Variables and API keys
 .env*
 
+# Results directory
+results/
+
+# AI Coding Tools
+.claude
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
