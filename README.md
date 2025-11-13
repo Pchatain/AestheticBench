@@ -102,3 +102,13 @@ MORALBENCH_WORKERS=5 uv run --env-file .env python main.py
 # Run sequentially (no parallelism)
 MORALBENCH_WORKERS=0 uv run --env-file .env python main.py
 ```
+
+# Roadmap
+- [ ] Create a vizualization server to analyze results
+- [ ] Create an LLM as judge to classify and sort replies
+
+## Infra TODOs
+- [ ] Add ruff linting and formatting to the code
+- [ ] Cleanup architecture
+- [ ] Add testing framework
+- [ ] Setup CI/CD to distribute this as a package
