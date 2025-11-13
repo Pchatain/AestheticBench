@@ -1,0 +1,7 @@
+[project]
+name = "moralbench"
+version = "0.1.0"
+description = "Package to measure the morality of LLMs"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []

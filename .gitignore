@@ -1,0 +1,16 @@
+# Environment Variables and API keys
+.env*
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+
+# Distribution files
+dist/
+build/
+*.egg-info/
+.eggs/
