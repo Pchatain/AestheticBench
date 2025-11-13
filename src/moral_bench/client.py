@@ -2,6 +2,7 @@
 
 import httpx
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 from typing import Optional
 
 from .config import Config
@@ -207,12 +208,13 @@ class OpenRouterClient:
 
         # Sequential mode when max_workers is 0
         if max_workers == 0:
-            for i, message in enumerate(messages):
+            for i, message in tqdm(enumerate(messages), total=len(messages),
+                                   desc="Processing prompts", unit="prompt", leave=True):
                 try:
                     response = self.chat_completion(message, model)
                     results.append((i, message, response))
                 except Exception as e:
-                    print(f"  ✗ Error: {e}")
+                    tqdm.write(f"  ✗ Error: {e}")
                     results.append((i, message, None))
             return results
 
@@ -223,7 +225,7 @@ class OpenRouterClient:
                 response = self.chat_completion(message, model)
                 return (index, message, response)
             except Exception as e:
-                print(f"  ✗ Error processing message {index}: {e}")
+                tqdm.write(f"  ✗ Error processing message {index}: {e}")
                 return (index, message, None)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -233,10 +235,13 @@ class OpenRouterClient:
                 for i, msg in enumerate(messages)
             }
 
-            # Collect results as they complete
-            for future in as_completed(future_to_index):
-                result = future.result()
-                results.append(result)
+            # Collect results as they complete with progress bar
+            with tqdm(total=len(messages), desc="Processing prompts",
+                     unit="prompt", leave=True) as pbar:
+                for future in as_completed(future_to_index):
+                    result = future.result()
+                    results.append(result)
+                    pbar.update(1)
 
         # Sort results by original index to maintain order
         results.sort(key=lambda x: x[0])

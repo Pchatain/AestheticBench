@@ -1,9 +1,9 @@
 """Main entry point for MoralBench."""
 
-import sys
 from pathlib import Path
 
 import typer
+from tqdm import tqdm
 from typing_extensions import Annotated
 
 from src.moral_bench import Config, OpenRouterClient, PromptProcessor
@@ -250,15 +250,11 @@ def run(
         successful = 0
         failed = 0
 
-        for idx, current_model in enumerate(models, 1):
-            print(f"\n{'='*60}")
-            print(f"Processing model {idx}/{total_models}: {current_model}")
-            print(f"{'='*60}\n")
-
+        for current_model in tqdm(models, desc="Processing models", unit="model", leave=True):
             # Verify model exists
             if not client.verify_model(current_model):
-                print(f"\nModel verification failed for: {current_model}")
-                print("Skipping this model...\n")
+                tqdm.write(f"\nModel verification failed for: {current_model}")
+                tqdm.write("Skipping this model...\n")
                 failed += 1
                 continue
 
@@ -275,8 +271,8 @@ def run(
                 print("\n\nProcess interrupted by user")
                 raise typer.Exit(code=1)
             except Exception as e:
-                print(f"\nError during processing: {e}")
-                print("Skipping this model...\n")
+                tqdm.write(f"\nError during processing: {e}")
+                tqdm.write("Skipping this model...\n")
                 failed += 1
                 continue
 

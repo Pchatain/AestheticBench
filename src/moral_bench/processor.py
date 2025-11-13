@@ -3,6 +3,7 @@
 import csv
 from datetime import datetime
 from pathlib import Path
+from tqdm import tqdm
 from typing import Optional
 
 from .client import OpenRouterClient
@@ -117,10 +118,10 @@ class PromptProcessor:
             topic = prompt.get('Topic', '')
 
             if response:
-                print(f"[{i}/{len(prompts)}] ✓ {topic} ({len(response)} chars)")
+                tqdm.write(f"[{i}/{len(prompts)}] ✓ {topic} ({len(response)} chars)")
                 model_response = response
             else:
-                print(f"[{i}/{len(prompts)}] ✗ {topic} (error)")
+                tqdm.write(f"[{i}/{len(prompts)}] ✗ {topic} (error)")
                 model_response = "ERROR: Request failed"
 
             results.append({
