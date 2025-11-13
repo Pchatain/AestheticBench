@@ -1,166 +1,82 @@
-import os
+"""Main entry point for MoralBench."""
+
 import sys
-import csv
-import json
-import requests
-from datetime import datetime
 from pathlib import Path
 
+import typer
+from typing_extensions import Annotated
 
-def check_health():
-    """Verify OpenRouter API connection with a simple test request."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
+from src.moral_bench import Config, OpenRouterClient, PromptProcessor
 
-    if not api_key:
-        print("Error: OPENROUTER_API_KEY not found in environment variables")
-        print("Please run setup.sh to configure your API key")
-        return False
+app = typer.Typer()
 
-    print("Testing OpenRouter API connection...")
 
-    try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "https://github.com/moralbench",
-                "X-Title": "MoralBench",
-            },
-            json={
-                "model": "openai/gpt-4o",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "Say 'OK' if you can read this."
-                    }
-                ]
-            },
-            timeout=30
+@app.command()
+def run(
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="Model to use for completions (e.g., openai/gpt-4o)"
         )
-
-        if response.status_code == 200:
-            print("✓ OpenRouter API connection successful")
-            return True
-        else:
-            print(f"✗ API request failed with status code: {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Connection error: {e}")
-        return False
-
-
-def process_prompts():
-    """Read prompts from CSV and get responses from OpenRouter API."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    model = "openai/gpt-4o"
-
-    # Read input CSV
-    prompts_file = Path("prompts/v1.csv")
-    if not prompts_file.exists():
-        print(f"Error: {prompts_file} not found")
-        return
-
-    print(f"\nReading prompts from {prompts_file}...")
-
-    with open(prompts_file, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        prompts = list(reader)
-
-    print(f"Found {len(prompts)} prompts to process")
-
-    # Prepare output directory and file
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = Path("results/v1")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    model_name = model.replace("/", "_")
-    output_file = output_dir / f"{model_name}_{timestamp}.csv"
-
-    print(f"Output will be saved to: {output_file}")
-    print("\nProcessing prompts...\n")
-
-    results = []
-
-    for i, prompt in enumerate(prompts, 1):
-        topic = prompt.get('Topic', '')
-        question = prompt.get('Question', '')
-
-        print(f"[{i}/{len(prompts)}] Processing: {topic}")
-
-        try:
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "HTTP-Referer": "https://github.com/moralbench",
-                    "X-Title": "MoralBench",
-                },
-                json={
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": question
-                        }
-                    ]
-                },
-                timeout=60
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                model_response = data['choices'][0]['message']['content']
-                print(f"  ✓ Got response ({len(model_response)} chars)")
-            else:
-                model_response = f"ERROR: Status {response.status_code} - {response.text}"
-                print(f"  ✗ Request failed: {response.status_code}")
-
-        except Exception as e:
-            model_response = f"ERROR: {str(e)}"
-            print(f"  ✗ Error: {e}")
-
-        results.append({
-            'Topic': topic,
-            'Question': question,
-            'Model Response': model_response,
-            'Timestamp': datetime.now().isoformat()
-        })
-
-    # Write results to CSV
-    print(f"\nWriting results to {output_file}...")
-
-    with open(output_file, 'w', newline='', encoding='utf-8') as f:
-        fieldnames = ['Topic', 'Question', 'Model Response', 'Timestamp']
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
-
-    print(f"✓ Complete! Results saved to {output_file}")
-
-
-def main():
-    """Main entry point for MoralBench."""
+    ] = "openai/gpt-4o",
+    prompts_file: Annotated[
+        Path,
+        typer.Option(
+            "--prompts",
+            "-p",
+            help="Path to input CSV file with prompts"
+        )
+    ] = Path("prompts/v1.csv"),
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for output CSV files"
+        )
+    ] = Path("results/v1"),
+):
+    """Run MoralBench morality testing with the specified model."""
     print("========================================")
     print("  MoralBench - LLM Morality Testing")
     print("========================================\n")
 
-    # Run health check
-    if not check_health():
-        print("\nHealth check failed. Please verify your setup.")
-        sys.exit(1)
-
-    # Process prompts
+    # Load configuration
     try:
-        process_prompts()
-    except KeyboardInterrupt:
-        print("\n\nProcess interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nError during processing: {e}")
-        sys.exit(1)
+        config = Config.from_env()
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        raise typer.Exit(code=1)
+
+    # Create client and verify model
+    with OpenRouterClient(config) as client:
+        # Verify model exists
+        if not client.verify_model(model):
+            print(f"\nModel verification failed for: {model}")
+            raise typer.Exit(code=1)
+
+        # Run health check
+        if not client.health_check():
+            print("\nHealth check failed. Please verify your setup.")
+            raise typer.Exit(code=1)
+
+        # Process prompts
+        try:
+            processor = PromptProcessor(client)
+            processor.process_prompts(
+                prompts_file=prompts_file,
+                output_dir=output_dir,
+                model=model,
+            )
+        except KeyboardInterrupt:
+            print("\n\nProcess interrupted by user")
+            raise typer.Exit(code=1)
+        except Exception as e:
+            print(f"\nError during processing: {e}")
+            raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
-    main()
+    app()
