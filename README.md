@@ -41,12 +41,37 @@ You can customize the model and paths using command-line options:
 # Use a different model
 uv run --env-file .env python main.py --model anthropic/claude-3.5-sonnet
 
+# Run multiple models from a text file
+uv run --env-file .env python main.py --models-file configurations/selected_models.txt
+
 # Specify custom input/output paths
 uv run --env-file .env python main.py -p prompts/custom.csv -o results/custom
 
 # See all available options
 uv run --env-file .env python main.py --help
 ```
+
+#### Running Multiple Models
+
+To test multiple models in sequence, create a text file with one model ID per line:
+
+```text
+# configurations/selected_models.txt
+openai/gpt-4o
+anthropic/claude-3.5-sonnet
+google/gemini-pro-1.5
+```
+
+Then run:
+```bash
+uv run --env-file .env python main.py --models-file configurations/selected_models.txt
+```
+
+This will:
+- Verify each model exists on OpenRouter
+- Process all prompts for each model sequentially
+- Save separate results files for each model
+- Display a summary of successful and failed runs
 
 ### Configuration
 

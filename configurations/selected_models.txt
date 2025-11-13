@@ -9,4 +9,4 @@ deepseek/deepseek-v3.2-exp
 z-ai/glm-4.6
 mistralai/mistral-nemo
 qwen/qwen3-235b-a22b-2507
-
+meta-llama/llama-3.1-405b-instruct
