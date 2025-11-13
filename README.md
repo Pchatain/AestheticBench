@@ -21,7 +21,25 @@ This will:
 
 ## Running Model Inference
 
-After setup is complete, run model inference with:
+### First Time: Dry Run (Recommended)
+
+Before running actual inference, it's recommended to do a dry run to:
+- Verify all models are available
+- See how many prompts will be processed
+- Get cost estimates for API usage
+
+```bash
+uv run --env-file .env python main.py --dry-run
+```
+
+For multiple models:
+```bash
+uv run --env-file .env python main.py --models-file configurations/selected_models.txt --dry-run
+```
+
+### Running Inference
+
+After verifying with a dry run, run model inference with:
 
 ```bash
 uv run --env-file .env python main.py

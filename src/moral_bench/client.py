@@ -57,34 +57,58 @@ class OpenRouterClient:
             print(f"✗ Error fetching models: {e}")
             return None
 
-    def verify_model(self, model_name: str) -> bool:
+    def get_model_info(self, model_name: str) -> Optional[dict]:
+        """Get detailed information about a specific model.
+
+        Args:
+            model_name: The model ID to look up (e.g., "openai/gpt-4o").
+
+        Returns:
+            Dictionary with model information including pricing, or None if not found.
+        """
+        models = self.get_available_models()
+        if models is None:
+            return None
+
+        for model in models:
+            if model.get('id') == model_name:
+                return model
+
+        return None
+
+    def verify_model(self, model_name: str, verbose: bool = True) -> bool:
         """Verify that a model exists in OpenRouter's available models.
 
         Args:
             model_name: The model ID to verify (e.g., "openai/gpt-4o").
+            verbose: Whether to print verification messages.
 
         Returns:
             True if the model exists, False otherwise.
         """
-        print(f"Verifying model: {model_name}...")
+        if verbose:
+            print(f"Verifying model: {model_name}...")
 
         models = self.get_available_models()
         if models is None:
-            print("✗ Could not fetch available models")
+            if verbose:
+                print("✗ Could not fetch available models")
             return False
 
         # Check if model exists
         model_ids = [model.get('id') for model in models]
         if model_name in model_ids:
-            print(f"✓ Model '{model_name}' is available")
+            if verbose:
+                print(f"✓ Model '{model_name}' is available")
             return True
         else:
-            print(f"✗ Model '{model_name}' not found")
-            print(f"  Available models: {len(model_ids)} total")
-            # Show similar models if any
-            similar = [m for m in model_ids if model_name.split('/')[0] in m]
-            if similar:
-                print(f"  Similar models: {', '.join(similar[:5])}")
+            if verbose:
+                print(f"✗ Model '{model_name}' not found")
+                print(f"  Available models: {len(model_ids)} total")
+                # Show similar models if any
+                similar = [m for m in model_ids if model_name.split('/')[0] in m]
+                if similar:
+                    print(f"  Similar models: {', '.join(similar[:5])}")
             return False
 
     def health_check(self) -> bool:
