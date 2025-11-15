@@ -24,11 +24,11 @@ def read_models_from_file(file_path: Path) -> list[str]:
         raise FileNotFoundError(f"Models file not found: {file_path}")
 
     models = []
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             # Skip empty lines and comments
-            if line and not line.startswith('#'):
+            if line and not line.startswith("#"):
                 models.append(line)
 
     return models
@@ -56,12 +56,12 @@ def print_dry_run_report(
     Returns:
         Tuple of (valid_models, invalid_models).
     """
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DRY RUN REPORT")
-    print("="*70)
+    print("=" * 70)
 
     # Calculate token estimates
-    total_chars = sum(len(prompt.get('Question', '')) for prompt in prompts)
+    total_chars = sum(len(prompt.get("Question", "")) for prompt in prompts)
     total_input_tokens = estimate_tokens(total_chars) if prompts else 0
     avg_input_tokens = total_input_tokens // len(prompts) if prompts else 0
     # Estimate output tokens (rough approximation: 100-500 tokens per response)
@@ -70,13 +70,17 @@ def print_dry_run_report(
 
     print(f"\nPrompts to process: {len(prompts)}")
     print(f"Average input tokens per prompt: ~{avg_input_tokens}")
-    print(f"Expected output tokens per prompt: ~{min_output_tokens}-{max_output_tokens}")
+    print(
+        f"Expected output tokens per prompt: ~{min_output_tokens}-{max_output_tokens}"
+    )
     print(f"\nTotal input tokens estimate: ~{total_input_tokens:,}")
-    print(f"Total output tokens estimate: ~{min_output_tokens * len(prompts):,}-{max_output_tokens * len(prompts):,}")
+    print(
+        f"Total output tokens estimate: ~{min_output_tokens * len(prompts):,}-{max_output_tokens * len(prompts):,}"
+    )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"MODELS TO PROCESS: {len(models)}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     valid_models = []
     invalid_models = []
@@ -88,7 +92,7 @@ def print_dry_run_report(
 
         # Verify model
         if not client.verify_model(model_name, verbose=False):
-            print(f"  Status: ✗ NOT FOUND")
+            print("  Status: ✗ NOT FOUND")
             invalid_models.append(model_name)
             print()
             continue
@@ -97,12 +101,12 @@ def print_dry_run_report(
 
         # Get model info for pricing
         model_info = client.get_model_info(model_name)
-        if model_info and 'pricing' in model_info:
-            pricing = model_info['pricing']
+        if model_info and "pricing" in model_info:
+            pricing = model_info["pricing"]
             # Pricing is returned as string values per token, not per 1M tokens
             # Convert to float and multiply by 1M to get cost per 1M tokens
-            prompt_cost_per_token = float(pricing.get('prompt', '0'))
-            completion_cost_per_token = float(pricing.get('completion', '0'))
+            prompt_cost_per_token = float(pricing.get("prompt", "0"))
+            completion_cost_per_token = float(pricing.get("completion", "0"))
 
             # Convert to cost per 1M tokens for display
             prompt_cost = prompt_cost_per_token * 1_000_000
@@ -110,8 +114,12 @@ def print_dry_run_report(
 
             # Calculate costs using per-token prices
             input_cost = total_input_tokens * prompt_cost_per_token
-            min_output_cost = (min_output_tokens * len(prompts)) * completion_cost_per_token
-            max_output_cost = (max_output_tokens * len(prompts)) * completion_cost_per_token
+            min_output_cost = (
+                min_output_tokens * len(prompts)
+            ) * completion_cost_per_token
+            max_output_cost = (
+                max_output_tokens * len(prompts)
+            ) * completion_cost_per_token
 
             min_total = input_cost + min_output_cost
             max_total = input_cost + max_output_cost
@@ -119,19 +127,21 @@ def print_dry_run_report(
             total_min_cost += min_total
             total_max_cost += max_total
 
-            print(f"  Status: ✓ AVAILABLE")
-            print(f"  Pricing: ${prompt_cost:.2f}/M input, ${completion_cost:.2f}/M output")
+            print("  Status: ✓ AVAILABLE")
+            print(
+                f"  Pricing: ${prompt_cost:.2f}/M input, ${completion_cost:.2f}/M output"
+            )
             print(f"  Estimated cost: ${min_total:.4f} - ${max_total:.4f}")
         else:
-            print(f"  Status: ✓ AVAILABLE")
-            print(f"  Pricing: Not available")
+            print("  Status: ✓ AVAILABLE")
+            print("  Pricing: Not available")
 
         print()
 
     # Print summary
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print("SUMMARY")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Valid models: {len(valid_models)}")
     print(f"Invalid models: {len(invalid_models)}")
     print(f"Total requests: {len(prompts) * len(valid_models):,}")
@@ -139,7 +149,7 @@ def print_dry_run_report(
     if total_min_cost > 0 or total_max_cost > 0:
         print(f"\nTotal estimated cost: ${total_min_cost:.4f} - ${total_max_cost:.4f}")
 
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     return valid_models, invalid_models
 
@@ -151,39 +161,30 @@ def run(
         typer.Option(
             "--model",
             "-m",
-            help="Model to use for completions (e.g., openai/gpt-4o). Mutually exclusive with --models-file."
-        )
+            help="Model to use for completions (e.g., openai/gpt-4o). Mutually exclusive with --models-file.",
+        ),
     ] = None,
     models_file: Annotated[
         Path,
         typer.Option(
             "--models-file",
             "-f",
-            help="Path to text file with list of models (one per line). Mutually exclusive with --model."
-        )
+            help="Path to text file with list of models (one per line). Mutually exclusive with --model.",
+        ),
     ] = None,
     prompts_file: Annotated[
         Path,
-        typer.Option(
-            "--prompts",
-            "-p",
-            help="Path to input CSV file with prompts"
-        )
+        typer.Option("--prompts", "-p", help="Path to input CSV file with prompts"),
     ] = Path("prompts/v1.csv"),
     output_dir: Annotated[
-        Path,
-        typer.Option(
-            "--output",
-            "-o",
-            help="Directory for output CSV files"
-        )
+        Path, typer.Option("--output", "-o", help="Directory for output CSV files")
     ] = Path("results/v1"),
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Verify models and show cost estimates without running inference"
-        )
+            help="Verify models and show cost estimates without running inference",
+        ),
     ] = False,
 ):
     """Run MoralBench morality testing with the specified model(s)."""
@@ -238,11 +239,15 @@ def run(
             valid_models, invalid_models = print_dry_run_report(client, models, prompts)
 
             if invalid_models:
-                print(f"\nWarning: {len(invalid_models)} model(s) not found and will be skipped.")
+                print(
+                    f"\nWarning: {len(invalid_models)} model(s) not found and will be skipped."
+                )
                 print("Remove --dry-run to proceed with valid models only.")
                 raise typer.Exit(code=1)
             else:
-                print("\nAll models verified! Remove --dry-run to proceed with inference.")
+                print(
+                    "\nAll models verified! Remove --dry-run to proceed with inference."
+                )
                 raise typer.Exit(code=0)
 
         # Process each model
@@ -250,7 +255,9 @@ def run(
         successful = 0
         failed = 0
 
-        for current_model in tqdm(models, desc="Processing models", unit="model", leave=True):
+        for current_model in tqdm(
+            models, desc="Processing models", unit="model", leave=True
+        ):
             # Verify model exists
             if not client.verify_model(current_model):
                 tqdm.write(f"\nModel verification failed for: {current_model}")
@@ -278,12 +285,12 @@ def run(
 
         # Print summary if multiple models
         if total_models > 1:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("Summary:")
             print(f"  Total models: {total_models}")
             print(f"  Successful: {successful}")
             print(f"  Failed: {failed}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
         if failed > 0 and successful == 0:
             raise typer.Exit(code=1)

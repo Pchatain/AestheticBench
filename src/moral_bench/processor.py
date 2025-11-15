@@ -4,7 +4,6 @@ import csv
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
-from typing import Optional
 
 from .client import OpenRouterClient
 
@@ -28,7 +27,7 @@ class CSVReader:
         if not file_path.exists():
             raise FileNotFoundError(f"CSV file not found: {file_path}")
 
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             return list(reader)
 
@@ -61,8 +60,8 @@ class ResultWriter:
         output_file = output_dir / f"{sanitized_model_name}_{timestamp}.csv"
 
         # Write results to CSV
-        with open(output_file, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['Topic', 'Question', 'Model Response', 'Timestamp']
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
+            fieldnames = ["Topic", "Question", "Model Response", "Timestamp"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
@@ -103,9 +102,11 @@ class PromptProcessor:
         print(f"Found {len(prompts)} prompts to process")
 
         # Prepare messages for batch processing
-        messages = [prompt.get('Question', '') for prompt in prompts]
+        messages = [prompt.get("Question", "") for prompt in prompts]
 
-        print(f"Output will be saved to: {output_dir / model.replace('/', '_')}_<timestamp>.csv")
+        print(
+            f"Output will be saved to: {output_dir / model.replace('/', '_')}_<timestamp>.csv"
+        )
         print("\nProcessing prompts in parallel...\n")
 
         # Process in parallel
@@ -115,7 +116,7 @@ class PromptProcessor:
         results = []
         for i, (idx, message, response) in enumerate(batch_results, 1):
             prompt = prompts[idx]
-            topic = prompt.get('Topic', '')
+            topic = prompt.get("Topic", "")
 
             if response:
                 tqdm.write(f"[{i}/{len(prompts)}] ✓ {topic} ({len(response)} chars)")
@@ -124,15 +125,17 @@ class PromptProcessor:
                 tqdm.write(f"[{i}/{len(prompts)}] ✗ {topic} (error)")
                 model_response = "ERROR: Request failed"
 
-            results.append({
-                'Topic': topic,
-                'Question': message,
-                'Model Response': model_response,
-                'Timestamp': datetime.now().isoformat()
-            })
+            results.append(
+                {
+                    "Topic": topic,
+                    "Question": message,
+                    "Model Response": model_response,
+                    "Timestamp": datetime.now().isoformat(),
+                }
+            )
 
         # Write results
-        print(f"\nWriting results...")
+        print("\nWriting results...")
         output_file = ResultWriter.write_results(results, output_dir, model)
         print(f"✓ Complete! Results saved to {output_file}")
 

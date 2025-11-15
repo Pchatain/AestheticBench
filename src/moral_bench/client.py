@@ -49,7 +49,7 @@ class OpenRouterClient:
 
             if response.status_code == 200:
                 data = response.json()
-                return data.get('data', [])
+                return data.get("data", [])
             else:
                 print(f"✗ Failed to fetch models: {response.status_code}")
                 return None
@@ -72,7 +72,7 @@ class OpenRouterClient:
             return None
 
         for model in models:
-            if model.get('id') == model_name:
+            if model.get("id") == model_name:
                 return model
 
         return None
@@ -97,7 +97,7 @@ class OpenRouterClient:
             return False
 
         # Check if model exists
-        model_ids = [model.get('id') for model in models]
+        model_ids = [model.get("id") for model in models]
         if model_name in model_ids:
             if verbose:
                 print(f"✓ Model '{model_name}' is available")
@@ -107,7 +107,7 @@ class OpenRouterClient:
                 print(f"✗ Model '{model_name}' not found")
                 print(f"  Available models: {len(model_ids)} total")
                 # Show similar models if any
-                similar = [m for m in model_ids if model_name.split('/')[0] in m]
+                similar = [m for m in model_ids if model_name.split("/")[0] in m]
                 if similar:
                     print(f"  Similar models: {', '.join(similar[:5])}")
             return False
@@ -126,11 +126,8 @@ class OpenRouterClient:
                 json={
                     "model": "openai/gpt-4o",
                     "messages": [
-                        {
-                            "role": "user",
-                            "content": "Say 'OK' if you can read this."
-                        }
-                    ]
+                        {"role": "user", "content": "Say 'OK' if you can read this."}
+                    ],
                 },
                 timeout=self.config.health_check_timeout,
             )
@@ -168,21 +165,13 @@ class OpenRouterClient:
         """
         response = self._client.post(
             self.config.base_url,
-            json={
-                "model": model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": message
-                    }
-                ]
-            },
+            json={"model": model, "messages": [{"role": "user", "content": message}]},
             timeout=timeout or self.config.request_timeout,
         )
 
         response.raise_for_status()
         data = response.json()
-        return data['choices'][0]['message']['content']
+        return data["choices"][0]["message"]["content"]
 
     def batch_chat_completions(
         self,
@@ -208,8 +197,13 @@ class OpenRouterClient:
 
         # Sequential mode when max_workers is 0
         if max_workers == 0:
-            for i, message in tqdm(enumerate(messages), total=len(messages),
-                                   desc="Processing prompts", unit="prompt", leave=True):
+            for i, message in tqdm(
+                enumerate(messages),
+                total=len(messages),
+                desc="Processing prompts",
+                unit="prompt",
+                leave=True,
+            ):
                 try:
                     response = self.chat_completion(message, model)
                     results.append((i, message, response))
@@ -236,8 +230,12 @@ class OpenRouterClient:
             }
 
             # Collect results as they complete with progress bar
-            with tqdm(total=len(messages), desc="Processing prompts",
-                     unit="prompt", leave=True) as pbar:
+            with tqdm(
+                total=len(messages),
+                desc="Processing prompts",
+                unit="prompt",
+                leave=True,
+            ) as pbar:
                 for future in as_completed(future_to_index):
                     result = future.result()
                     results.append(result)
