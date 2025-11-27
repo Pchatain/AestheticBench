@@ -457,10 +457,10 @@ def run(
 
 @app.command()
 def grade(
-    results_file: Annotated[
-        Path,
+    results_pattern: Annotated[
+        str,
         typer.Argument(
-            help="Path to results CSV file to grade (e.g., results/v2/responses/openai_gpt-4o_timestamp.csv)"
+            help="Path to results CSV file(s) to grade. Supports glob patterns (e.g., results/v2/responses/*.csv)"
         ),
     ],
     graders: Annotated[
@@ -487,22 +487,52 @@ def grade(
             help="Directory for graded output CSV (auto-derived if not specified)",
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show files to be graded and estimate costs without running grading",
+        ),
+    ] = False,
 ):
     """Grade model responses using specified grader prompts."""
+    import csv
+    import glob
+
     print("========================================")
     print("  MoralBench - Grade Model Responses")
     print("========================================\n")
 
-    # Validate results file exists
-    if not results_file.exists():
-        print(f"Error: Results file not found: {results_file}")
+    # Expand glob pattern to get list of files
+    matched_files = sorted(glob.glob(results_pattern))
+    if not matched_files:
+        # Try as literal path
+        if Path(results_pattern).exists():
+            matched_files = [results_pattern]
+        else:
+            print(f"Error: No files found matching pattern: {results_pattern}")
+            raise typer.Exit(code=1)
+
+    results_files = [Path(f) for f in matched_files]
+    print(f"Found {len(results_files)} file(s) to grade:")
+    for f in results_files:
+        print(f"  - {f}")
+    print()
+
+    # Validate all results CSVs have required columns
+    valid_files = []
+    for results_file in results_files:
+        is_valid, error_msg = validate_results_csv(results_file)
+        if not is_valid:
+            print(f"Warning: Skipping invalid CSV {results_file} - {error_msg}")
+        else:
+            valid_files.append(results_file)
+
+    if not valid_files:
+        print("Error: No valid results CSV files found")
         raise typer.Exit(code=1)
 
-    # Validate results CSV has required columns
-    is_valid, error_msg = validate_results_csv(results_file)
-    if not is_valid:
-        print(f"Error: Invalid results CSV - {error_msg}")
-        raise typer.Exit(code=1)
+    results_files = valid_files
 
     # Grader selection
     if graders:
@@ -515,9 +545,41 @@ def grade(
         # Interactive selection
         grader_ids = select_graders_interactive()
 
-    # Derive output directory if not specified
+    # Dry-run mode: show what would be graded and estimate costs
+    if dry_run:
+        print("\n" + "=" * 70)
+        print("DRY RUN REPORT - GRADING")
+        print("=" * 70)
+
+        total_responses = 0
+        for results_file in results_files:
+            with open(results_file, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                count = sum(1 for _ in reader)
+                total_responses += count
+                print(f"  {results_file}: {count} responses")
+
+        print(f"\nTotal responses to grade: {total_responses}")
+        print(f"Graders to run: {', '.join(grader_ids)}")
+        print(f"Total grading calls: {total_responses * len(grader_ids)}")
+        print(f"Grader model: {grader_model}")
+
+        # Rough token estimates
+        avg_input_tokens = 500  # prompt + question + response
+        avg_output_tokens = 50  # just a score
+        total_input = total_responses * len(grader_ids) * avg_input_tokens
+        total_output = total_responses * len(grader_ids) * avg_output_tokens
+
+        print(f"\nEstimated tokens:")
+        print(f"  Input: ~{total_input:,}")
+        print(f"  Output: ~{total_output:,}")
+        print("=" * 70)
+        print("\nRemove --dry-run to proceed with grading.")
+        raise typer.Exit(code=0)
+
+    # Derive output directory if not specified (use first file for derivation)
     if output_dir is None:
-        output_dir = derive_grades_output_dir(results_file)
+        output_dir = derive_grades_output_dir(results_files[0])
 
     # Load configuration
     try:
@@ -540,15 +602,17 @@ def grade(
             raise typer.Exit(code=1)
         print(f"✓ Grader model verified: {grader_model}")
 
-        # Process grading
+        # Process grading for each file
         try:
             processor = GradingProcessor(client)
-            processor.grade_responses(
-                results_file=results_file,
-                output_dir=output_dir,
-                grader_ids=grader_ids,
-                grader_model=grader_model,
-            )
+            for idx, results_file in enumerate(results_files, 1):
+                print(f"\n[{idx}/{len(results_files)}] Grading: {results_file}")
+                processor.grade_responses(
+                    results_file=results_file,
+                    output_dir=output_dir,
+                    grader_ids=grader_ids,
+                    grader_model=grader_model,
+                )
         except KeyboardInterrupt:
             print("\n\nProcess interrupted by user")
             raise typer.Exit(code=1)
