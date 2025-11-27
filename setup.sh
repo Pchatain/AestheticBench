@@ -114,7 +114,7 @@ echo "Running health check..."
 echo ""
 
 # Run health check
-if uv run --env-file .env main.py; then
+if uv run --env-file .env main.py health-check; then
     echo ""
     echo "=========================================="
     echo "  Setup Complete!"
@@ -149,12 +149,14 @@ tell application "Terminal"
     activate
     do script "cd \"$PROJECT_DIR/packages/backend\" && echo 'Starting Backend Server...' && ./run.sh"
     delay 1
-    tell application "System Events" to keystroke "t" using {command down}
-    delay 0.5
-    do script "cd \"$PROJECT_DIR/packages/frontend\" && echo 'Starting Frontend Server...' && npm run dev" in front window
 end tell
 EOF
         echo "Backend server starting at: http://localhost:8000"
+        osascript <<EOF
+tell application "Terminal"
+    do script "cd \"$PROJECT_DIR/packages/frontend\" && echo 'Starting Frontend Server...' && npm run dev"
+end tell
+EOF
         echo "Frontend server starting at: http://localhost:5173"
         echo ""
         echo "Two new terminal tabs have been opened:"
