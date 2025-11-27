@@ -103,9 +103,39 @@ MORALBENCH_WORKERS=5 uv run --env-file .env python main.py
 MORALBENCH_WORKERS=0 uv run --env-file .env python main.py
 ```
 
+## Grading Responses
+
+After running inference, you can grade the model responses using an LLM-as-judge approach.
+
+### Available Graders
+
+- **preference1** - Categorical preference scoring (-1, 0, 1)
+- **preference2** - Continuous preference scoring [-1, 1]
+- **justification** - Quality rating (1-5 scale)
+
+### Running Grading
+
+```bash
+# Grade with a single grader
+uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --graders preference1
+
+# Grade with multiple graders
+uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --graders preference1,preference2,justification
+
+# Interactive grader selection (prompts you to choose)
+uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv
+
+# Use a different model for grading
+uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --grader-model anthropic/claude-sonnet-4.5
+```
+
+### Output
+
+Grading results are saved to `results/<version>/grades/` with additional score columns appended to the original CSV data.
+
 # Roadmap
-- [ ] Create a vizualization server to analyze results
-- [ ] Create an LLM as judge to classify and sort replies
+- [ ] Create a visualization server to analyze results
+- [x] Create an LLM as judge to classify and sort replies
 
 ## Infra TODOs
 - [ ] Add ruff linting and formatting to the code

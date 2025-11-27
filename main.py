@@ -7,6 +7,7 @@ from tqdm import tqdm
 from typing_extensions import Annotated
 
 from src.moral_bench import Config, OpenRouterClient, PromptProcessor
+from src.moral_bench.grading import GradingProcessor
 
 app = typer.Typer()
 
@@ -41,21 +42,158 @@ def estimate_tokens(text_or_length: str | int) -> int:
     return len(text_or_length) // 4
 
 
-def derive_output_dir(prompts_file: Path) -> Path:
+def derive_output_dir(prompts_file: Path, subdir: str = "responses") -> Path:
     """Derive output directory from prompt file name.
 
     Extracts the version identifier from the prompt file name
-    and maps it to results/{version}.
+    and maps it to results/{version}/{subdir}.
 
     Args:
         prompts_file: Path to the prompt file (e.g., prompts/v1.csv or prompts/v2.tsv)
+        subdir: Subdirectory within results/{version}/ (e.g., 'responses' or 'grades')
 
     Returns:
-        Path to output directory (e.g., results/v1 or results/v2)
+        Path to output directory (e.g., results/v1/responses or results/v2/grades)
     """
     # Extract filename without extension (e.g., "v1" from "v1.csv")
     version = prompts_file.stem
-    return Path("results") / version
+    return Path("results") / version / subdir
+
+
+def derive_grades_output_dir(results_file: Path) -> Path:
+    """Derive grades output directory from results file path.
+
+    Tries to intelligently map:
+      results/v2/responses/model_timestamp.csv -> results/v2/grades/
+
+    Args:
+        results_file: Path to input results CSV
+
+    Returns:
+        Path to grades output directory
+    """
+    parts = results_file.parts
+
+    # Try to find 'results' in the path
+    if "results" in parts:
+        results_idx = parts.index("results")
+
+        # Check if there's a version directory after 'results'
+        if len(parts) > results_idx + 1:
+            version = parts[results_idx + 1]
+            return Path("results") / version / "grades"
+
+    # Fallback: use results/grades/
+    return Path("results") / "grades"
+
+
+def parse_graders_from_string(graders_str: str) -> list[str]:
+    """Parse comma-separated grader string.
+
+    Args:
+        graders_str: Comma-separated grader names (e.g., "preference1,justification")
+
+    Returns:
+        List of validated grader identifiers
+
+    Raises:
+        ValueError: If any grader name is invalid
+    """
+    valid_graders = {"preference1", "preference2", "justification"}
+
+    graders = [g.strip().lower() for g in graders_str.split(",")]
+
+    invalid = [g for g in graders if g not in valid_graders]
+    if invalid:
+        raise ValueError(
+            f"Invalid grader(s): {', '.join(invalid)}. "
+            f"Valid options: {', '.join(valid_graders)}"
+        )
+
+    return graders
+
+
+def select_graders_interactive() -> list[str]:
+    """Prompt user to select which graders to run.
+
+    Returns:
+        List of selected grader identifiers (e.g., ['preference1', 'justification'])
+    """
+    print("\n" + "=" * 70)
+    print("SELECT GRADERS")
+    print("=" * 70)
+    print("\nAvailable graders:")
+    print("  1. preference1  - Categorical (-1, 0, 1) preference scoring")
+    print("  2. preference2  - Continuous [-1, 1] preference scoring")
+    print("  3. justification - Quality of justification (1-5 scale)")
+    print("\nYou can select multiple graders (comma-separated).")
+    print("Examples: '1,3' or 'preference1,justification' or 'all'\n")
+
+    grader_map = {
+        "1": "preference1",
+        "2": "preference2",
+        "3": "justification",
+        "preference1": "preference1",
+        "preference2": "preference2",
+        "justification": "justification",
+        "all": ["preference1", "preference2", "justification"],
+    }
+
+    selection = typer.prompt("Select graders")
+
+    # Handle 'all' case
+    if selection.strip().lower() == "all":
+        return grader_map["all"]
+
+    # Parse comma-separated input
+    selected = []
+    for item in selection.split(","):
+        item = item.strip().lower()
+        if item in grader_map:
+            value = grader_map[item]
+            if isinstance(value, list):
+                selected.extend(value)
+            else:
+                selected.append(value)
+        else:
+            print(f"Warning: Unknown grader '{item}', skipping...")
+
+    # Remove duplicates while preserving order
+    selected = list(dict.fromkeys(selected))
+
+    if not selected:
+        print("Error: No valid graders selected")
+        raise typer.Exit(code=1)
+
+    print(f"\nSelected graders: {', '.join(selected)}")
+    return selected
+
+
+def validate_results_csv(file_path: Path) -> tuple[bool, str]:
+    """Validate that results CSV has expected structure.
+
+    Args:
+        file_path: Path to results CSV
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    import csv
+
+    required_columns = {"Topic", "Question", "Model Response", "Timestamp"}
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = set(reader.fieldnames or [])
+
+            missing = required_columns - fieldnames
+            if missing:
+                return False, f"Missing required columns: {', '.join(missing)}"
+
+            return True, ""
+    except Exception as e:
+        return False, f"Error reading CSV: {e}"
 
 
 def print_dry_run_report(
@@ -314,6 +452,108 @@ def run(
             print(f"{'=' * 60}")
 
         if failed > 0 and successful == 0:
+            raise typer.Exit(code=1)
+
+
+@app.command()
+def grade(
+    results_file: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to results CSV file to grade (e.g., results/v2/responses/openai_gpt-4o_timestamp.csv)"
+        ),
+    ],
+    graders: Annotated[
+        str,
+        typer.Option(
+            "--graders",
+            "-g",
+            help="Comma-separated list of graders to run: preference1, preference2, justification",
+        ),
+    ] = None,
+    grader_model: Annotated[
+        str,
+        typer.Option(
+            "--grader-model",
+            "-m",
+            help="Model to use for grading (e.g., openai/gpt-4o)",
+        ),
+    ] = "openai/gpt-4o",
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for graded output CSV (auto-derived if not specified)",
+        ),
+    ] = None,
+):
+    """Grade model responses using specified grader prompts."""
+    print("========================================")
+    print("  MoralBench - Grade Model Responses")
+    print("========================================\n")
+
+    # Validate results file exists
+    if not results_file.exists():
+        print(f"Error: Results file not found: {results_file}")
+        raise typer.Exit(code=1)
+
+    # Validate results CSV has required columns
+    is_valid, error_msg = validate_results_csv(results_file)
+    if not is_valid:
+        print(f"Error: Invalid results CSV - {error_msg}")
+        raise typer.Exit(code=1)
+
+    # Grader selection
+    if graders:
+        try:
+            grader_ids = parse_graders_from_string(graders)
+        except ValueError as e:
+            print(f"Error: {e}")
+            raise typer.Exit(code=1)
+    else:
+        # Interactive selection
+        grader_ids = select_graders_interactive()
+
+    # Derive output directory if not specified
+    if output_dir is None:
+        output_dir = derive_grades_output_dir(results_file)
+
+    # Load configuration
+    try:
+        config = Config.from_env()
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        raise typer.Exit(code=1)
+
+    # Create client and process grading
+    with OpenRouterClient(config) as client:
+        # Run health check
+        if not client.health_check():
+            print("\nHealth check failed. Please verify your setup.")
+            raise typer.Exit(code=1)
+
+        # Verify grader model exists
+        print(f"\nVerifying grader model: {grader_model}...")
+        if not client.verify_model(grader_model, verbose=False):
+            print(f"✗ Grader model not found: {grader_model}")
+            raise typer.Exit(code=1)
+        print(f"✓ Grader model verified: {grader_model}")
+
+        # Process grading
+        try:
+            processor = GradingProcessor(client)
+            processor.grade_responses(
+                results_file=results_file,
+                output_dir=output_dir,
+                grader_ids=grader_ids,
+                grader_model=grader_model,
+            )
+        except KeyboardInterrupt:
+            print("\n\nProcess interrupted by user")
+            raise typer.Exit(code=1)
+        except Exception as e:
+            print(f"\nError during grading: {e}")
             raise typer.Exit(code=1)
 
 
