@@ -41,6 +41,23 @@ def estimate_tokens(text_or_length: str | int) -> int:
     return len(text_or_length) // 4
 
 
+def derive_output_dir(prompts_file: Path) -> Path:
+    """Derive output directory from prompt file name.
+
+    Extracts the version identifier from the prompt file name
+    and maps it to results/{version}.
+
+    Args:
+        prompts_file: Path to the prompt file (e.g., prompts/v1.csv or prompts/v2.tsv)
+
+    Returns:
+        Path to output directory (e.g., results/v1 or results/v2)
+    """
+    # Extract filename without extension (e.g., "v1" from "v1.csv")
+    version = prompts_file.stem
+    return Path("results") / version
+
+
 def print_dry_run_report(
     client: OpenRouterClient,
     models: list[str],
@@ -174,11 +191,11 @@ def run(
     ] = None,
     prompts_file: Annotated[
         Path,
-        typer.Option("--prompts", "-p", help="Path to input CSV file with prompts"),
-    ] = Path("prompts/v1.csv"),
+        typer.Option("--prompts", "-p", help="Path to input CSV/TSV file with prompts"),
+    ] = Path("prompts/v2.tsv"),
     output_dir: Annotated[
-        Path, typer.Option("--output", "-o", help="Directory for output CSV files")
-    ] = Path("results/v1"),
+        Path, typer.Option("--output", "-o", help="Directory for output CSV files (auto-derived from prompts file if not specified)")
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -211,6 +228,10 @@ def run(
         # Default to single model
         models = ["openai/gpt-4o"]
         print("No model specified, using default: openai/gpt-4o")
+
+    # If output_dir not specified, derive from prompts_file
+    if output_dir is None:
+        output_dir = derive_output_dir(prompts_file)
 
     # Load configuration
     try:

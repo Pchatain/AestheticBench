@@ -9,26 +9,49 @@ from .client import OpenRouterClient
 
 
 class CSVReader:
-    """Read prompts from CSV files."""
+    """Read prompts from CSV/TSV files."""
+
+    @staticmethod
+    def _detect_delimiter(file_path: Path) -> str:
+        """Detect delimiter based on file extension.
+
+        Args:
+            file_path: Path to the data file
+
+        Returns:
+            Delimiter character (',' for CSV or '\t' for TSV)
+
+        Raises:
+            ValueError: If file extension is not .csv or .tsv
+        """
+        suffix = file_path.suffix.lower()
+        if suffix == '.csv':
+            return ','
+        elif suffix == '.tsv':
+            return '\t'
+        else:
+            raise ValueError(f"Unsupported file extension: {suffix}. Use .csv or .tsv")
 
     @staticmethod
     def read_prompts(file_path: Path) -> list[dict[str, str]]:
-        """Read prompts from a CSV file.
+        """Read prompts from a CSV/TSV file.
 
         Args:
-            file_path: Path to the CSV file.
+            file_path: Path to the CSV/TSV file.
 
         Returns:
             List of dictionaries containing prompt data.
 
         Raises:
-            FileNotFoundError: If the CSV file doesn't exist.
+            FileNotFoundError: If the CSV/TSV file doesn't exist.
+            ValueError: If file extension is not .csv or .tsv.
         """
         if not file_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {file_path}")
+            raise FileNotFoundError(f"CSV/TSV file not found: {file_path}")
 
+        delimiter = CSVReader._detect_delimiter(file_path)
         with open(file_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
+            reader = csv.DictReader(f, delimiter=delimiter)
             return list(reader)
 
 
