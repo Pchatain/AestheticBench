@@ -3,18 +3,13 @@ export interface Model {
   filename: string
 }
 
-export interface Result {
-  uid: number
-  model: string
-  topic: string
-  question: string
-  response: string
-  timestamp: string
-}
+// Dynamic result with arbitrary columns from graded files
+export type Result = Record<string, string | number>
 
 export interface ResultsResponse {
   results: Result[]
   total: number
+  headers: string[]
 }
 
 export interface ModelsResponse {
@@ -23,4 +18,21 @@ export interface ModelsResponse {
 
 export interface TopicsResponse {
   topics: string[]
+}
+
+export interface HeadersResponse {
+  headers: string[]
+}
+
+export interface GradesSummary {
+  model: string
+  preference1_avg: number | null
+  preference2_avg: number | null
+  justification_avg: number | null
+  count: number
+}
+
+export interface GradesSummaryResponse {
+  summaries: GradesSummary[]
+  topic_counts: Record<string, number>
 }

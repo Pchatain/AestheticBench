@@ -1,63 +1,194 @@
 import {
-  createColumnHelper,
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Result } from '../types'
 
 interface ResultsTableProps {
   results: Result[]
+  headers: string[]
   loading: boolean
 }
 
-const columnHelper = createColumnHelper<Result>()
+interface ModalState {
+  isOpen: boolean
+  title: string
+  content: string
+}
 
-const columns = [
-  columnHelper.accessor('uid', {
-    header: 'UID',
-    cell: (info) => info.getValue(),
-    size: 60,
-  }),
-  columnHelper.accessor('model', {
-    header: 'Model',
-    cell: (info) => info.getValue(),
-    size: 150,
-  }),
-  columnHelper.accessor('topic', {
-    header: 'Topic',
-    cell: (info) => (
-      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-        {info.getValue()}
-      </span>
-    ),
-    size: 120,
-  }),
-  columnHelper.accessor('question', {
-    header: 'Question',
-    cell: (info) => (
-      <div className="max-w-md truncate" title={info.getValue()}>
-        {info.getValue()}
-      </div>
-    ),
-  }),
-  columnHelper.accessor('response', {
-    header: 'Response',
-    cell: (info) => (
-      <div className="max-w-lg max-h-24 overflow-auto text-sm text-gray-600">
-        {info.getValue().slice(0, 300)}
-        {info.getValue().length > 300 && '...'}
-      </div>
-    ),
-  }),
-]
+function TextModal({ isOpen, title, content, onClose }: ModalState & { onClose: () => void }) {
+  if (!isOpen) return null
 
-export function ResultsTable({ results, loading }: ResultsTableProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+        <div className="px-6 py-4 overflow-y-auto flex-1">
+          <p className="whitespace-pre-wrap text-gray-700">{content}</p>
+        </div>
+        <div className="px-6 py-4 border-t flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function createColumns(
+  headers: string[],
+  onOpenModal: (title: string, content: string) => void
+): ColumnDef<Result, unknown>[] {
+  return headers.map((header) => {
+    // Special rendering for known columns
+    if (header === 'uid') {
+      return {
+        accessorKey: 'uid',
+        header: 'UID',
+        cell: (info) => info.getValue(),
+        size: 60,
+      } as ColumnDef<Result, unknown>
+    }
+
+    if (header === 'model') {
+      return {
+        accessorKey: 'model',
+        header: 'Model',
+        cell: (info) => info.getValue(),
+        size: 150,
+      } as ColumnDef<Result, unknown>
+    }
+
+    if (header === 'Topic') {
+      return {
+        accessorKey: 'Topic',
+        header: 'Topic',
+        cell: (info) => {
+          const value = info.getValue() as string
+          return value ? (
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+              {value}
+            </span>
+          ) : ''
+        },
+        size: 120,
+      } as ColumnDef<Result, unknown>
+    }
+
+    if (header === 'Question') {
+      return {
+        accessorKey: 'Question',
+        header: 'Question',
+        cell: (info) => {
+          const value = (info.getValue() as string) || ''
+          return (
+            <button
+              onClick={() => onOpenModal('Question', value)}
+              className="max-w-md truncate text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+              title="Click to view full text"
+            >
+              {value}
+            </button>
+          )
+        },
+      } as ColumnDef<Result, unknown>
+    }
+
+    if (header === 'Model Response') {
+      return {
+        accessorKey: 'Model Response',
+        header: 'Response',
+        cell: (info) => {
+          const value = (info.getValue() as string) || ''
+          return (
+            <button
+              onClick={() => onOpenModal('Response', value)}
+              className="max-w-lg text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-sm"
+              title="Click to view full text"
+            >
+              <span className="line-clamp-3">
+                {value.slice(0, 300)}
+                {value.length > 300 && '...'}
+              </span>
+            </button>
+          )
+        },
+      } as ColumnDef<Result, unknown>
+    }
+
+    if (header === 'Timestamp') {
+      return {
+        accessorKey: 'Timestamp',
+        header: 'Timestamp',
+        cell: (info) => {
+          const value = (info.getValue() as string) || ''
+          return <span className="text-xs text-gray-500">{value}</span>
+        },
+        size: 180,
+      } as ColumnDef<Result, unknown>
+    }
+
+    // Score columns (contain 'Score' in name)
+    if (header.includes('Score')) {
+      return {
+        accessorKey: header,
+        header: header.replace(/_/g, ' '),
+        cell: (info) => {
+          const value = info.getValue()
+          return value !== '' && value !== undefined ? (
+            <span className="font-mono text-sm">{String(value)}</span>
+          ) : (
+            <span className="text-gray-300">-</span>
+          )
+        },
+        size: 100,
+      } as ColumnDef<Result, unknown>
+    }
+
+    // Default column rendering
+    return {
+      accessorKey: header,
+      header: header.replace(/_/g, ' '),
+      cell: (info) => {
+        const value = info.getValue()
+        return value !== '' && value !== undefined ? String(value) : ''
+      },
+    } as ColumnDef<Result, unknown>
+  })
+}
+
+export function ResultsTable({ results, headers, loading }: ResultsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const [modal, setModal] = useState<ModalState>({ isOpen: false, title: '', content: '' })
+
+  const openModal = (title: string, content: string) => {
+    setModal({ isOpen: true, title, content })
+  }
+
+  const closeModal = () => {
+    setModal({ isOpen: false, title: '', content: '' })
+  }
+
+  const columns = useMemo(() => createColumns(headers, openModal), [headers])
 
   const table = useReactTable({
     data: results,
@@ -89,6 +220,7 @@ export function ResultsTable({ results, loading }: ResultsTableProps) {
   }
 
   return (
+    <>
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -155,5 +287,13 @@ export function ResultsTable({ results, loading }: ResultsTableProps) {
         </div>
       </div>
     </div>
+
+    <TextModal
+      isOpen={modal.isOpen}
+      title={modal.title}
+      content={modal.content}
+      onClose={closeModal}
+    />
+    </>
   )
 }

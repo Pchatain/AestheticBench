@@ -1,4 +1,4 @@
-import type { ModelsResponse, ResultsResponse, TopicsResponse } from './types'
+import type { GradesSummaryResponse, HeadersResponse, ModelsResponse, ResultsResponse, TopicsResponse } from './types'
 
 const API_BASE = '/api'
 
@@ -14,6 +14,11 @@ export async function fetchTopics(model?: string): Promise<TopicsResponse> {
   return res.json()
 }
 
+export async function fetchHeaders(): Promise<HeadersResponse> {
+  const res = await fetch(`${API_BASE}/headers`)
+  return res.json()
+}
+
 export async function fetchResults(params: {
   model?: string
   topic?: string
@@ -24,5 +29,20 @@ export async function fetchResults(params: {
   if (params.topic) searchParams.set('topic', params.topic)
   if (params.search) searchParams.set('search', params.search)
   const res = await fetch(`${API_BASE}/results?${searchParams}`)
+  return res.json()
+}
+
+export async function fetchGradesSummary(params: {
+  models?: string[]
+  topics?: string[]
+}): Promise<GradesSummaryResponse> {
+  const searchParams = new URLSearchParams()
+  if (params.models && params.models.length > 0) {
+    searchParams.set('models', params.models.join(','))
+  }
+  if (params.topics && params.topics.length > 0) {
+    searchParams.set('topics', params.topics.join(','))
+  }
+  const res = await fetch(`${API_BASE}/grades/summary?${searchParams}`)
   return res.json()
 }

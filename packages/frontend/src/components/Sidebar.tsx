@@ -4,7 +4,8 @@ interface SidebarProps {
 }
 
 const pages = [
-  { id: 'results', label: 'Results Table', icon: '📊' },
+  { id: 'results', label: 'Sample Viewer', icon: '📊' },
+  { id: 'comparison', label: 'Model Comparison', icon: '🕸️' },
 ]
 
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
