@@ -1,3 +1,6 @@
+# MacOs
+.DS_Store
+
 # Environment Variables and API keys
 .env*
 
