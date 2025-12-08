@@ -293,7 +293,7 @@ def get_grades_summary(
             pref1 = row.get("Preference_1_Score", "")
             if pref1 and not pref1.startswith("ERROR"):
                 try:
-                    model_scores[model_name]["preference1_sum"] += float(pref1)
+                    model_scores[model_name]["preference1_sum"] += float(pref1)**2
                     model_scores[model_name]["preference1_count"] += 1
                 except ValueError:
                     pass
@@ -301,7 +301,7 @@ def get_grades_summary(
             pref2 = row.get("Preference_2_Score", "")
             if pref2 and not pref2.startswith("ERROR"):
                 try:
-                    model_scores[model_name]["preference2_sum"] += float(pref2)
+                    model_scores[model_name]["preference2_sum"] += float(pref2)**2
                     model_scores[model_name]["preference2_count"] += 1
                 except ValueError:
                     pass
