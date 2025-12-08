@@ -6,9 +6,64 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Query
+import httpx
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 router = APIRouter()
+
+
+class PlaygroundRequest(BaseModel):
+    prompt: str
+    model: str = "openai/gpt-4o"
+
+
+class PlaygroundResponse(BaseModel):
+    response: str
+    model: str
+
+
+def get_openrouter_headers() -> dict[str, str]:
+    """Get headers for OpenRouter API requests."""
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OPENROUTER_API_KEY not configured on server"
+        )
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/moralbench",
+        "X-Title": "MoralBench",
+    }
+
+
+@router.post("/playground/run", response_model=PlaygroundResponse)
+async def run_prompt(request: PlaygroundRequest):
+    """Run a prompt through a model and return the response."""
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=get_openrouter_headers(),
+                json={
+                    "model": request.model,
+                    "messages": [{"role": "user", "content": request.prompt}],
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return PlaygroundResponse(
+                response=data["choices"][0]["message"]["content"],
+                model=request.model,
+            )
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"OpenRouter API error: {e.response.text}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Read from local data folder (copied by run.sh)
 DATA_DIR = Path(__file__).parents[3] / "data" / "results" / "v2"

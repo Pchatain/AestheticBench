@@ -1,4 +1,4 @@
-import type { GradesSummaryResponse, HeadersResponse, ModelsResponse, ResultsResponse, TopicsResponse } from './types'
+import type { GradesSummaryResponse, HeadersResponse, ModelsResponse, PlaygroundResponse, ResultsResponse, TopicsResponse } from './types'
 
 const API_BASE = '/api'
 
@@ -44,5 +44,18 @@ export async function fetchGradesSummary(params: {
     searchParams.set('topics', params.topics.join(','))
   }
   const res = await fetch(`${API_BASE}/grades/summary?${searchParams}`)
+  return res.json()
+}
+
+export async function runPrompt(prompt: string, model: string): Promise<PlaygroundResponse> {
+  const res = await fetch(`${API_BASE}/playground/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, model }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to run prompt')
+  }
   return res.json()
 }

@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { FilterBar } from './components/FilterBar'
 import { ResultsTable } from './components/ResultsTable'
 import { ModelComparison } from './components/ModelComparison'
+import { Playground } from './components/Playground'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
 import type { Model, Result } from './types'
 
@@ -67,6 +68,7 @@ function App() {
           </>
         )}
         {currentPage === 'comparison' && <ModelComparison />}
+        {currentPage === 'playground' && <Playground />}
       </main>
     </div>
   )

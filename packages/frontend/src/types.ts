@@ -36,3 +36,13 @@ export interface GradesSummaryResponse {
   summaries: GradesSummary[]
   topic_counts: Record<string, number>
 }
+
+export interface PlaygroundRequest {
+  prompt: string
+  model: string
+}
+
+export interface PlaygroundResponse {
+  response: string
+  model: string
+}
