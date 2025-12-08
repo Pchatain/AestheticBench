@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { FilterBar } from './components/FilterBar'
 import { ResultsTable } from './components/ResultsTable'
 import { ModelComparison } from './components/ModelComparison'
-import { Playground } from './components/Playground'
+import { PlaygroundSidebar } from './components/Playground'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
 import type { Model, Result } from './types'
 
@@ -14,6 +14,7 @@ function App() {
   const [results, setResults] = useState<Result[]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [isPlaygroundOpen, setIsPlaygroundOpen] = useState(false)
 
   const [selectedModel, setSelectedModel] = useState('')
   const [selectedTopic, setSelectedTopic] = useState('')
@@ -50,7 +51,7 @@ function App() {
   return (
     <div className="flex min-h-screen">
       <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
-      <main className="flex-1 p-6">
+      <main className={`flex-1 p-6 transition-all duration-300 ${isPlaygroundOpen ? 'mr-[400px]' : ''}`}>
         {currentPage === 'results' && (
           <>
             <h2 className="text-2xl font-bold mb-4">Sample Viewer</h2>
@@ -68,8 +69,23 @@ function App() {
           </>
         )}
         {currentPage === 'comparison' && <ModelComparison />}
-        {currentPage === 'playground' && <Playground />}
       </main>
+
+      {/* Floating Playground Button */}
+      {!isPlaygroundOpen && (
+        <button
+          onClick={() => setIsPlaygroundOpen(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all hover:scale-110 z-40"
+          title="Open Playground"
+        >
+          🧪
+        </button>
+      )}
+
+      <PlaygroundSidebar
+        isOpen={isPlaygroundOpen}
+        onClose={() => setIsPlaygroundOpen(false)}
+      />
     </div>
   )
 }

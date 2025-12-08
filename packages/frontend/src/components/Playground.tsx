@@ -59,7 +59,12 @@ Please provide only your numerical score based on the grading criteria above.`,
   },
 }
 
-export function Playground() {
+interface PlaygroundSidebarProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export function PlaygroundSidebar({ isOpen, onClose }: PlaygroundSidebarProps) {
   const [model, setModel] = useState(AVAILABLE_MODELS[0])
   const [template, setTemplate] = useState<keyof typeof GRADER_TEMPLATES>('none')
   const [prompt, setPrompt] = useState('')
@@ -95,19 +100,34 @@ export function Playground() {
   }
 
   return (
-    <div className="max-w-4xl">
-      <h2 className="text-2xl font-bold mb-6">Playground</h2>
+    <div
+      className={`fixed top-0 right-0 h-full bg-white border-l border-gray-200 shadow-lg transition-transform duration-300 ease-in-out z-50 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      }`}
+      style={{ width: '400px' }}
+    >
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold">Playground</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-      <div className="space-y-4">
-        <div className="flex gap-4">
-          <div className="flex-1">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Model
             </label>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {AVAILABLE_MODELS.map((m) => (
                 <option key={m} value={m}>
@@ -117,14 +137,14 @@ export function Playground() {
             </select>
           </div>
 
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Load Grader Template
             </label>
             <select
               value={template}
               onChange={(e) => handleTemplateChange(e.target.value as keyof typeof GRADER_TEMPLATES)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {Object.entries(GRADER_TEMPLATES).map(([key, { label }]) => (
                 <option key={key} value={key}>
@@ -133,45 +153,45 @@ export function Playground() {
               ))}
             </select>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Prompt
-          </label>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Enter your prompt here..."
-            rows={12}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-          />
-        </div>
-
-        <button
-          onClick={handleRun}
-          disabled={loading || !prompt.trim()}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Running...' : 'Run'}
-        </button>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
-          </div>
-        )}
-
-        {response && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Response
+              Prompt
             </label>
-            <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 whitespace-pre-wrap font-mono text-sm min-h-[100px]">
-              {response}
-            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Enter your prompt here..."
+              rows={10}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+            />
           </div>
-        )}
+
+          <button
+            onClick={handleRun}
+            disabled={loading || !prompt.trim()}
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            {loading ? 'Running...' : 'Run'}
+          </button>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          {response && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Response
+              </label>
+              <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 whitespace-pre-wrap font-mono text-xs min-h-[100px] max-h-[300px] overflow-y-auto">
+                {response}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
