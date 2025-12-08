@@ -2,13 +2,20 @@ import { useState } from 'react'
 import { runPrompt } from '../api'
 
 const AVAILABLE_MODELS = [
+  'anthropic/claude-sonnet-4.5',
+  'deepseek/deepseek-chat-v3-0324',
+  'deepseek/deepseek-chat-v3.1',
+  'deepseek/deepseek-v3.2-exp',
+  'google/gemini-2.5-pro',
+  'meta-llama/llama-3.1-405b-instruct',
+  'mistralai/mistral-nemo',
+  'openai/gpt-5',
   'openai/gpt-4o',
   'openai/gpt-4o-mini',
-  'openai/gpt-4-turbo',
-  'anthropic/claude-3.5-sonnet',
-  'anthropic/claude-3-opus',
-  'google/gemini-pro-1.5',
-  'meta-llama/llama-3.1-70b-instruct',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3-235b-a22b-2507',
+  'x-ai/grok-4-fast',
+  'z-ai/glm-4.6',
 ]
 
 const GRADER_TEMPLATES = {
@@ -124,17 +131,19 @@ export function PlaygroundSidebar({ isOpen, onClose }: PlaygroundSidebarProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Model
             </label>
-            <select
+            <input
+              type="text"
+              list="model-options"
               value={model}
               onChange={(e) => setModel(e.target.value)}
+              placeholder="Type or select a model..."
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            />
+            <datalist id="model-options">
               {AVAILABLE_MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m} />
               ))}
-            </select>
+            </datalist>
           </div>
 
           <div>
