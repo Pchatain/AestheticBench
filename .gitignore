@@ -1,3 +1,6 @@
+# MacOs
+.DS_Store
+
 # Environment Variables and API keys
 .env*
 
@@ -20,3 +23,13 @@ dist/
 build/
 *.egg-info/
 .eggs/
+
+# npm packages
+**/node_modules/
+
+# vite
+**/dist/
+**/dist-ssr/
+**/node_modules/.vite
+**/.vite
+**/.vite-env

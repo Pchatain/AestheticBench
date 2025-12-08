@@ -455,6 +455,30 @@ def run(
             raise typer.Exit(code=1)
 
 
+@app.command("health-check")
+def health_check():
+    """Run a health check to verify API connectivity and configuration."""
+    print("========================================")
+    print("  MoralBench - Health Check")
+    print("========================================\n")
+
+    # Load configuration
+    try:
+        config = Config.from_env()
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        raise typer.Exit(code=1)
+
+    # Create client and run health check
+    with OpenRouterClient(config) as client:
+        if client.health_check():
+            print("\n✓ Health check passed!")
+            raise typer.Exit(code=0)
+        else:
+            print("\n✗ Health check failed. Please verify your setup.")
+            raise typer.Exit(code=1)
+
+
 @app.command()
 def grade(
     results_pattern: Annotated[

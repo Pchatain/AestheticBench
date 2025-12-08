@@ -15,9 +15,27 @@ Run setup.sh by copy and pasting the following command in your terminal:
 This will:
 1. Prompt you for your OpenRouter API key (get one at https://openrouter.ai/keys)
 2. Save the key to your `.env` file
-3. Check for `uv` installation
-4. Install dependencies
-5. Run a health check
+3. Check for `uv` installation (Python package manager)
+4. Check for `npm` installation (required for the visualization UI)
+5. Install Python and frontend dependencies
+6. Run a health check
+7. **Optionally start the visualization UI** - if you choose yes, two new terminal tabs will open:
+   - **Tab 1**: Backend API server (FastAPI at http://localhost:8000)
+   - **Tab 2**: Frontend dev server (Vite at http://localhost:5173)
+
+### Starting the Visualization UI Later
+
+If you skipped starting the UI during setup, you can start it manually:
+
+```bash
+# Terminal 1: Start the backend
+cd packages/backend && ./run.sh
+
+# Terminal 2: Start the frontend
+cd packages/frontend && npm run dev
+```
+
+Then open http://localhost:5173 in your browser.
 
 ## Running Model Inference
 
@@ -134,8 +152,10 @@ uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_t
 Grading results are saved to `results/<version>/grades/` with additional score columns appended to the original CSV data.
 
 # Roadmap
-- [ ] Create a visualization server to analyze results
+- [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
+    - [ ] Update the grades to include reasoning for the grade assigned.
+    - [ ] Update UI to display the reasoning for the grade assigned.
 
 ## Infra TODOs
 - [ ] Add ruff linting and formatting to the code
