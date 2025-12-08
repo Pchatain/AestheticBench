@@ -47,12 +47,12 @@ Before running actual inference, it's recommended to do a dry run to:
 - Get cost estimates for API usage
 
 ```bash
-uv run --env-file .env python main.py --dry-run
+uv run --env-file .env python main.py run --dry-run
 ```
 
 For multiple models:
 ```bash
-uv run --env-file .env python main.py --models-file configurations/selected_models.txt --dry-run
+uv run --env-file .env python main.py --models-file configurations/selected_models.txt run --dry-run
 ```
 
 ### Running Inference
@@ -60,7 +60,7 @@ uv run --env-file .env python main.py --models-file configurations/selected_mode
 After verifying with a dry run, run model inference with:
 
 ```bash
-uv run --env-file .env python main.py
+uv run --env-file .env python main.py run
 ```
 
 This will:

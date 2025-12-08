@@ -41,6 +41,8 @@ export function ModelComparison() {
   const [summaries, setSummaries] = useState<GradesSummary[]>([])
   const [topicCounts, setTopicCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<'model' | 'preference1' | 'preference2' | 'justification' | 'count'>('model')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     fetchModels().then((data) => setModels(data.models))
@@ -66,6 +68,32 @@ export function ModelComparison() {
   useEffect(() => {
     loadSummaries()
   }, [loadSummaries])
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  const sortedSummaries = [...summaries].sort((a, b) => {
+    const direction = sortDir === 'asc' ? 1 : -1
+    switch (sortKey) {
+      case 'preference1':
+        return direction * (((a.preference1_avg ?? -Infinity) as number) - ((b.preference1_avg ?? -Infinity) as number))
+      case 'preference2':
+        return direction * (((a.preference2_avg ?? -Infinity) as number) - ((b.preference2_avg ?? -Infinity) as number))
+      case 'justification':
+        return direction * (((a.justification_avg ?? -Infinity) as number) - ((b.justification_avg ?? -Infinity) as number))
+      case 'count':
+        return direction * (a.count - b.count)
+      case 'model':
+      default:
+        return direction * a.model.localeCompare(b.model)
+    }
+  })
 
   const handleModelToggle = (modelName: string) => {
     setSelectedModels((prev) =>
@@ -271,15 +299,40 @@ export function ModelComparison() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Preference 1</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Preference 2</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Justification</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Samples</th>
+                <th
+                  onClick={() => handleSort('model')}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                >
+                  Model {sortKey === 'model' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th
+                  onClick={() => handleSort('preference1')}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                >
+                  Preference 1 {sortKey === 'preference1' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th
+                  onClick={() => handleSort('preference2')}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                >
+                  Preference 2 {sortKey === 'preference2' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th
+                  onClick={() => handleSort('justification')}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                >
+                  Justification {sortKey === 'justification' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th
+                  onClick={() => handleSort('count')}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                >
+                  Samples {sortKey === 'count' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {summaries.map((summary) => (
+              {sortedSummaries.map((summary) => (
                 <tr key={summary.model} className="hover:bg-gray-50">
                   <td className="px-4 py-2 text-sm font-medium">{summary.model}</td>
                   <td className="px-4 py-2 text-sm">
