@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { FilterBar } from './components/FilterBar'
 import { ResultsTable } from './components/ResultsTable'
 import { ModelComparison } from './components/ModelComparison'
+import { Analytics } from './components/Analytics'
 import { PlaygroundSidebar } from './components/Playground'
 import { GraderPrompts } from './components/GraderPrompts'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
@@ -70,6 +71,7 @@ function App() {
           </>
         )}
         {currentPage === 'comparison' && <ModelComparison />}
+        {currentPage === 'analytics' && <Analytics />}
         {currentPage === 'prompts' && <GraderPrompts />}
       </main>
 
