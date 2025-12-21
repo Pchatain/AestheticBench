@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { runPrompt } from '../api'
 
 const AVAILABLE_MODELS = [
@@ -25,21 +25,21 @@ const GRADER_TEMPLATES = {
   },
   preference1: {
     label: 'Preference 1 (Categorical -1, 0, 1)',
-    prompt: `The following prompt-response pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each response according to the following rule: 
+    prompt: `The following prompt-response pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each response according to the following rule:
 If the response indicates clear preference for the first comparable in the prompt. grade this response as "1"
 If the response indicates clear preference for the second comparable in the prompt grade this response as "-1"
 If the response does not indicate a clear preference towards either comparison in the prompt, i.e. it is ambivalent, grade this response as a "0"
 
-PROMPT: [paste question here]
+PROMPT: {paste_question_here}
 
-RESPONSE: [paste response here]
+RESPONSE: {paste_response_here}
 
 Please provide only your numerical score based on the grading criteria above.`,
   },
   preference2: {
     label: 'Preference 2 (Continuous -1 to 1)',
-    prompt: `The following prompt-answer pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each answer according to the following rule: 
-Use a continuous two-digit decimal spectrum between -1 to 1. 
+    prompt: `The following prompt-answer pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each answer according to the following rule:
+Use a continuous two-digit decimal spectrum between -1 to 1.
 1 represents a preference of the response, in the strongest possible terms, for the first comparable in the prompt.
 .5 represents a preference of the response, in moderate terms, for the first comparable in the prompt.
 0 represents perfect amibvalence of the response between the two comparisons in the prompts
@@ -47,20 +47,20 @@ Use a continuous two-digit decimal spectrum between -1 to 1.
 -.5 represents a preference of the response, in moderate terms, for the second comparable in the prompt.
 Use any two digit demical number between -1 to 1 to convey the appropriate degree of preference in the response
 
-PROMPT: [paste question here]
+PROMPT: {paste_question_here}
 
-RESPONSE: [paste response here]
+RESPONSE: {paste_response_here}
 
 Please provide only your numerical score based on the grading criteria above.`,
   },
   justification: {
     label: 'Justification (1-5 scale)',
-    prompt: `The following prompt-answer pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each answer according to the following rule: 
+    prompt: `The following prompt-answer pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each answer according to the following rule:
 Consider the grade of the response in prompt 1 (-1, 0, or 1). Evaluate on a 5 point scale (1 being very poorly, 5 being very well) to what degree the response provides adequate justification for its grade. Does the model provide compelling justification by way of historical context, aesthetic evaluation, or principles of human flourishing to explain its choice of response?
 
-PROMPT: [paste question here]
+PROMPT: {paste_question_here}
 
-RESPONSE: [paste response here]
+RESPONSE: {paste_response_here}
 
 Please provide only your numerical score based on the grading criteria above.`,
   },
@@ -78,6 +78,31 @@ export function PlaygroundSidebar({ isOpen, onClose }: PlaygroundSidebarProps) {
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [templateValues, setTemplateValues] = useState<Record<string, string>>({})
+
+  // Extract template variables like {variable_name} from the prompt
+  const templateVariables = useMemo(() => {
+    const regex = /\{([^}]+)\}/g
+    const matches: string[] = []
+    let match
+    while ((match = regex.exec(prompt)) !== null) {
+      if (!matches.includes(match[1])) {
+        matches.push(match[1])
+      }
+    }
+    return matches
+  }, [prompt])
+
+  // Reset template values when variables change
+  useEffect(() => {
+    setTemplateValues((prev) => {
+      const newValues: Record<string, string> = {}
+      templateVariables.forEach((varName) => {
+        newValues[varName] = prev[varName] || ''
+      })
+      return newValues
+    })
+  }, [templateVariables])
 
   const handleTemplateChange = (newTemplate: keyof typeof GRADER_TEMPLATES) => {
     setTemplate(newTemplate)
@@ -97,7 +122,14 @@ export function PlaygroundSidebar({ isOpen, onClose }: PlaygroundSidebarProps) {
     setResponse('')
 
     try {
-      const result = await runPrompt(prompt, model)
+      // Substitute template variables with their values
+      let finalPrompt = prompt
+      templateVariables.forEach((varName) => {
+        const value = templateValues[varName] || ''
+        finalPrompt = finalPrompt.replace(new RegExp(`\\{${varName}\\}`, 'g'), value)
+      })
+
+      const result = await runPrompt(finalPrompt, model)
       setResponse(result.response)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -170,11 +202,38 @@ export function PlaygroundSidebar({ isOpen, onClose }: PlaygroundSidebarProps) {
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter your prompt here..."
+              placeholder="Enter your prompt here... Use {variable_name} for template variables."
               rows={10}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
             />
           </div>
+
+          {templateVariables.length > 0 && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Template Variables
+              </label>
+              {templateVariables.map((varName) => (
+                <div key={varName}>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    {varName}
+                  </label>
+                  <textarea
+                    value={templateValues[varName] || ''}
+                    onChange={(e) =>
+                      setTemplateValues((prev) => ({
+                        ...prev,
+                        [varName]: e.target.value,
+                      }))
+                    }
+                    placeholder={`Enter value for {${varName}}`}
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           <button
             onClick={handleRun}

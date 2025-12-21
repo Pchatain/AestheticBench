@@ -103,7 +103,7 @@ function createColumns(
           return (
             <button
               onClick={() => onOpenModal('Question', value)}
-              className="max-w-md truncate text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+              className="text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer whitespace-normal break-words"
               title="Click to view full text"
             >
               {value}
@@ -222,6 +222,32 @@ export function ResultsTable({ results, headers, loading }: ResultsTableProps) {
   return (
     <>
     <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="text-sm text-gray-700">
+          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+          {Math.min(
+            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+            results.length
+          )}{' '}
+          of {results.length} results
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
