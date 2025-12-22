@@ -52,6 +52,10 @@ export interface Annotation {
   result_uid: number
   model: string
   notes: string
+  preference_reasoning: string
+  preference_score: number | null
+  justification_reasoning: string
+  justification_score: number | null
   created_at: string
   updated_at: string
 }
@@ -60,6 +64,10 @@ export interface AnnotationCreate {
   result_uid: number
   model: string
   notes: string
+  preference_reasoning: string
+  preference_score: number | null
+  justification_reasoning: string
+  justification_score: number | null
 }
 
 export interface AnnotationsResponse {

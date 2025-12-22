@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { fetchModels, fetchTopics, fetchResults } from '../api'
 import type { Model, Result } from '../types'
+import { useAppStore } from '../store'
 
 const COLORS = [
   '#8884d8',
@@ -32,7 +33,7 @@ interface HistogramDataPoint {
 export function Analytics() {
   const [models, setModels] = useState<Model[]>([])
   const [topics, setTopics] = useState<string[]>([])
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const { selectedModels, toggleModel, setSelectedModels } = useAppStore()
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [loading, setLoading] = useState(false)
@@ -62,11 +63,7 @@ export function Analytics() {
   }, [loadResults])
 
   const handleModelToggle = (modelName: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelName)
-        ? prev.filter((m) => m !== modelName)
-        : [...prev, modelName]
-    )
+    toggleModel(modelName)
   }
 
   const handleTopicToggle = (topic: string) => {
@@ -294,7 +291,7 @@ export function Analytics() {
                   <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
                   <Tooltip />
                   <Legend />
-                  {selectedModels.map((modelName, idx) => (
+                  {selectedModels.map((modelName) => (
                     <Bar
                       key={modelName}
                       dataKey={modelName}
@@ -323,7 +320,7 @@ export function Analytics() {
                   <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
                   <Tooltip />
                   <Legend />
-                  {selectedModels.map((modelName, idx) => (
+                  {selectedModels.map((modelName) => (
                     <Bar
                       key={modelName}
                       dataKey={modelName}
@@ -346,7 +343,7 @@ export function Analytics() {
                   <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
                   <Tooltip />
                   <Legend />
-                  {selectedModels.map((modelName, idx) => (
+                  {selectedModels.map((modelName) => (
                     <Bar
                       key={modelName}
                       dataKey={modelName}

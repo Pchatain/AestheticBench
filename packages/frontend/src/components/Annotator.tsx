@@ -1,25 +1,106 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react'
 import { fetchModels, fetchTopics, fetchResults, fetchAnnotations, lookupAnnotation, saveAnnotation } from '../api'
 import type { Model, Result, Annotation } from '../types'
+import { useAppStore } from '../store'
+
+interface MiddleTruncateProps {
+  text: string
+  maxHeight: number
+}
+
+function MiddleTruncateText({ text, maxHeight }: MiddleTruncateProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const [truncatedText, setTruncatedText] = useState(text)
+
+  useLayoutEffect(() => {
+    if (!containerRef.current || !measureRef.current || !text) {
+      setTruncatedText(text || 'N/A')
+      return
+    }
+
+    const measureEl = measureRef.current
+    measureEl.style.visibility = 'hidden'
+    measureEl.style.position = 'absolute'
+    measureEl.style.whiteSpace = 'pre-wrap'
+    measureEl.textContent = text
+
+    // If full text fits, show it all
+    if (measureEl.scrollHeight <= maxHeight) {
+      setTruncatedText(text)
+      return
+    }
+
+    // Find first sentence
+    const sentenceMatch = text.match(/^[^.!?]*[.!?]/)
+    const firstSentence = sentenceMatch ? sentenceMatch[0].trim() : text.slice(0, 80).trim()
+
+    // Binary search for how much of the end fits
+    const availableHeight = maxHeight - 40 // Reserve space for first sentence + ellipsis
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim())
+    
+    let endText = ''
+    for (let i = paragraphs.length - 1; i >= 0; i--) {
+      const candidate = paragraphs[i].trim() + (endText ? '\n\n' + endText : '')
+      measureEl.textContent = candidate
+      if (measureEl.scrollHeight > availableHeight) break
+      endText = candidate
+    }
+
+    if (!endText) {
+      // Just show first sentence if nothing else fits
+      setTruncatedText(firstSentence + '\n...')
+    } else {
+      setTruncatedText(firstSentence + '\n\n...\n\n' + endText)
+    }
+  }, [text, maxHeight])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div ref={measureRef} className="invisible absolute w-full" />
+      <div className="whitespace-pre-wrap">{truncatedText}</div>
+    </div>
+  )
+}
+
+interface AnnotationData {
+  notes: string
+  preference_reasoning: string
+  preference_score: number | null
+  justification_reasoning: string
+  justification_score: number | null
+}
 
 interface AnnotationModalProps {
   isOpen: boolean
   result: Result | null
   model: string
   existingAnnotation: Annotation | null
-  onSave: (notes: string) => void
+  onSave: (data: AnnotationData) => void
   onClose: () => void
 }
 
 function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, onClose }: AnnotationModalProps) {
   const [notes, setNotes] = useState('')
+  const [preferenceReasoning, setPreferenceReasoning] = useState('')
+  const [preferenceScore, setPreferenceScore] = useState<string>('')
+  const [justificationReasoning, setJustificationReasoning] = useState('')
+  const [justificationScore, setJustificationScore] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (existingAnnotation) {
-      setNotes(existingAnnotation.notes)
+      setNotes(existingAnnotation.notes || '')
+      setPreferenceReasoning(existingAnnotation.preference_reasoning || '')
+      setPreferenceScore(existingAnnotation.preference_score !== null ? String(existingAnnotation.preference_score) : '')
+      setJustificationReasoning(existingAnnotation.justification_reasoning || '')
+      setJustificationScore(existingAnnotation.justification_score !== null ? String(existingAnnotation.justification_score) : '')
     } else {
       setNotes('')
+      setPreferenceReasoning('')
+      setPreferenceScore('')
+      setJustificationReasoning('')
+      setJustificationScore('')
     }
   }, [existingAnnotation, isOpen])
 
@@ -28,7 +109,13 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onSave(notes)
+      await onSave({
+        notes,
+        preference_reasoning: preferenceReasoning,
+        preference_score: preferenceScore !== '' ? parseFloat(preferenceScore) : null,
+        justification_reasoning: justificationReasoning,
+        justification_score: justificationScore !== '' ? parseInt(justificationScore) : null,
+      })
     } finally {
       setSaving(false)
     }
@@ -37,7 +124,7 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h3 className="text-lg font-semibold">
             Annotate Response - {model}
@@ -52,25 +139,92 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question</label>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded min-h-[60px] overflow-y-auto resize-y">
               {result.Question as string}
-            </p>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Model Response</label>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded min-h-[120px] max-h-[300px] overflow-y-auto whitespace-pre-wrap resize-y">
               {result[`response_${model}`] as string || result['Model Response'] as string || 'N/A'}
-            </p>
+            </div>
           </div>
+
+          {/* Preference Section */}
+          <div className="border rounded-lg p-4 bg-blue-50">
+            <h4 className="font-medium text-gray-800 mb-3">Preference Score (-1 to 1)</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning</label>
+                <textarea
+                  value={preferenceReasoning}
+                  onChange={(e) => setPreferenceReasoning(e.target.value)}
+                  placeholder="Explain your reasoning for the preference score..."
+                  className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+                  rows={1}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Score</label>
+                <input
+                  type="number"
+                  min="-1"
+                  max="1"
+                  step="0.1"
+                  value={preferenceScore}
+                  onChange={(e) => setPreferenceScore(e.target.value)}
+                  placeholder="-1 to 1"
+                  className="w-32 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                <span className="ml-2 text-xs text-gray-500">(-1 = strongly disagree, 0 = neutral, 1 = strongly agree)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Justification Section */}
+          <div className="border rounded-lg p-4 bg-green-50">
+            <h4 className="font-medium text-gray-800 mb-3">Justification Score (1 to 5)</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning</label>
+                <textarea
+                  value={justificationReasoning}
+                  onChange={(e) => setJustificationReasoning(e.target.value)}
+                  placeholder="Explain your reasoning for the justification score..."
+                  className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+                  rows={1}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Score</label>
+                <select
+                  value={justificationScore}
+                  onChange={(e) => setJustificationScore(e.target.value)}
+                  className="w-32 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">Select...</option>
+                  <option value="1">1 - Poor</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="3">3 - Good</option>
+                  <option value="4">4 - Very Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* General Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Annotation Notes</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Enter your annotation notes here..."
-              className="w-full h-40 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Any additional notes..."
+              className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+              rows={1}
             />
           </div>
+
           {existingAnnotation && (
             <p className="text-xs text-gray-500">
               Last updated: {new Date(existingAnnotation.updated_at).toLocaleString()}
@@ -100,7 +254,7 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
 export function Annotator() {
   const [models, setModels] = useState<Model[]>([])
   const [topics, setTopics] = useState<string[]>([])
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const { selectedModels, toggleModel, rowHeight, setRowHeight } = useAppStore()
   const [selectedTopic, setSelectedTopic] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
@@ -148,6 +302,9 @@ export function Annotator() {
         }
         allResultsByQuestion[question][`response_${model}`] = result['Model Response']
         allResultsByQuestion[question][`uid_${model}`] = result.uid
+        allResultsByQuestion[question][`p1_${model}`] = result['Preference_1_Score']
+        allResultsByQuestion[question][`p2_${model}`] = result['Preference_2_Score']
+        allResultsByQuestion[question][`j_${model}`] = result['Justification_Score']
       }
     }
 
@@ -171,11 +328,7 @@ export function Annotator() {
   }, [loadResults])
 
   const handleModelToggle = (modelName: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelName)
-        ? prev.filter((m) => m !== modelName)
-        : [...prev, modelName]
-    )
+    toggleModel(modelName)
   }
 
   const handleCellClick = async (result: Result, model: string) => {
@@ -201,14 +354,20 @@ export function Annotator() {
     setModalOpen(true)
   }
 
-  const handleSaveAnnotation = async (notes: string) => {
+  const handleSaveAnnotation = async (data: {
+    notes: string
+    preference_reasoning: string
+    preference_score: number | null
+    justification_reasoning: string
+    justification_score: number | null
+  }) => {
     if (!modalResult || !modalModel) return
 
     const uid = modalResult[`uid_${modalModel}`] as number
     const response = await saveAnnotation({
       result_uid: uid,
       model: modalModel,
-      notes,
+      ...data,
     })
 
     const cacheKey = getCacheKey(uid, modalModel)
@@ -220,7 +379,11 @@ export function Annotator() {
     const uid = result[`uid_${model}`] as number
     if (!uid) return false
     const cacheKey = getCacheKey(uid, model)
-    return cacheKey in annotationsCache && annotationsCache[cacheKey].notes.length > 0
+    if (!(cacheKey in annotationsCache)) return false
+    const ann = annotationsCache[cacheKey]
+    return (ann.notes?.length > 0) || 
+           (ann.preference_score !== null) || 
+           (ann.justification_score !== null)
   }
 
   return (
@@ -294,8 +457,20 @@ export function Annotator() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm text-gray-700">{results.length} questions</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Row height:</span>
+              <input
+                type="range"
+                min="60"
+                max="300"
+                value={rowHeight}
+                onChange={(e) => setRowHeight(Number(e.target.value))}
+                className="w-32 cursor-pointer"
+              />
+              <span className="text-xs text-gray-500 w-10">{rowHeight}px</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -322,39 +497,77 @@ export function Annotator() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {results.slice(0, 50).map((result, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-500">{idx + 1}</td>
-                    <td className="px-4 py-3 text-sm max-w-md">
-                      <span className="line-clamp-2">{result.Question as string}</span>
+                  <tr key={idx} className="hover:bg-gray-50" style={{ height: rowHeight }}>
+                    <td className="px-4 py-2 text-sm text-gray-500 align-top">{idx + 1}</td>
+                    <td className="px-4 py-2 text-sm max-w-md align-top">
+                      <div className="overflow-hidden" style={{ maxHeight: rowHeight - 16 }}>
+                        {result.Question as string}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2 align-top">
                       {result.Topic && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
                           {result.Topic as string}
                         </span>
                       )}
                     </td>
-                    {selectedModels.map((model) => (
-                      <td key={model} className="px-4 py-3">
-                        <button
-                          onClick={() => handleCellClick(result, model)}
-                          className={`w-full text-left p-2 rounded border text-sm hover:bg-gray-100 ${
-                            hasAnnotation(result, model)
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200'
-                          }`}
-                          title="Click to annotate"
-                        >
-                          <span className="line-clamp-3 text-gray-700">
-                            {(result[`response_${model}`] as string)?.slice(0, 150) || 'N/A'}
-                            {(result[`response_${model}`] as string)?.length > 150 && '...'}
-                          </span>
-                          {hasAnnotation(result, model) && (
-                            <span className="block mt-1 text-xs text-green-600">Annotated</span>
-                          )}
-                        </button>
-                      </td>
-                    ))}
+                    {selectedModels.map((model) => {
+                      const uid = result[`uid_${model}`] as number
+                      const cacheKey = uid ? getCacheKey(uid, model) : ''
+                      const annotation = cacheKey ? annotationsCache[cacheKey] : undefined
+                      const p1 = result[`p1_${model}`]
+                      const p2 = result[`p2_${model}`]
+                      const jScore = result[`j_${model}`]
+                      const hasL1Scores = p1 !== undefined || p2 !== undefined || jScore !== undefined
+                      const hasAnnotatorScores = annotation && (annotation.preference_score !== null || annotation.justification_score !== null)
+                      return (
+                        <td key={model} className="px-4 py-2 align-top">
+                          <button
+                            onClick={() => handleCellClick(result, model)}
+                            className={`w-full text-left p-2 rounded border text-sm hover:bg-gray-100 ${
+                              hasAnnotation(result, model)
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200'
+                            }`}
+                            style={{ height: rowHeight - 16 }}
+                            title="Click to annotate"
+                          >
+                            <div className="flex gap-2 h-full">
+                              <div className="flex-1 overflow-hidden text-gray-700">
+                                <MiddleTruncateText 
+                                  text={result[`response_${model}`] as string || 'N/A'} 
+                                  maxHeight={rowHeight - 40} 
+                                />
+                              </div>
+                              {(hasL1Scores || hasAnnotatorScores) && (
+                                <div className="flex flex-col items-end text-xs shrink-0 gap-1">
+                                  {hasL1Scores && (
+                                    <div className="flex flex-col items-end text-blue-600">
+                                      {p1 !== undefined && <span title="L1 Preference 1">p1: {p1}</span>}
+                                      {p2 !== undefined && <span title="L1 Preference 2">p2: {p2}</span>}
+                                      {jScore !== undefined && <span title="L1 Justification">j: {jScore}</span>}
+                                    </div>
+                                  )}
+                                  {hasL1Scores && hasAnnotatorScores && (
+                                    <div className="w-full border-t border-gray-300 my-0.5" />
+                                  )}
+                                  {hasAnnotatorScores && (
+                                    <div className="flex flex-col items-end text-gray-500">
+                                      {annotation.preference_score !== null && (
+                                        <span title="Annotator Preference">P: {annotation.preference_score}</span>
+                                      )}
+                                      {annotation.justification_score !== null && (
+                                        <span title="Annotator Justification">J: {annotation.justification_score}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>

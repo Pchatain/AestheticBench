@@ -119,9 +119,10 @@ function createColumns(
         header: 'Response',
         cell: (info) => {
           const value = (info.getValue() as string) || ''
+          const model = info.row.original.model as string || 'Unknown Model'
           return (
             <button
-              onClick={() => onOpenModal('Response', value)}
+              onClick={() => onOpenModal(`Response (${model})`, value)}
               className="max-w-lg text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-sm"
               title="Click to view full text"
             >

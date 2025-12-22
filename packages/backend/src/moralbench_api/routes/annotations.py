@@ -19,10 +19,18 @@ class AnnotationCreate(BaseModel):
     result_uid: int = Field(..., description="UID of the result being annotated")
     model: str = Field(..., description="Model name")
     notes: str = Field(default="", description="Free-form annotation notes")
+    preference_reasoning: str = Field(default="", description="Reasoning for preference score")
+    preference_score: Optional[float] = Field(None, ge=-1, le=1, description="Preference score from -1 to 1")
+    justification_reasoning: str = Field(default="", description="Reasoning for justification score")
+    justification_score: Optional[int] = Field(None, ge=1, le=5, description="Justification score from 1 to 5")
 
 
 class AnnotationUpdate(BaseModel):
     notes: Optional[str] = Field(None, description="Free-form annotation notes")
+    preference_reasoning: Optional[str] = Field(None, description="Reasoning for preference score")
+    preference_score: Optional[float] = Field(None, ge=-1, le=1, description="Preference score from -1 to 1")
+    justification_reasoning: Optional[str] = Field(None, description="Reasoning for justification score")
+    justification_score: Optional[int] = Field(None, ge=1, le=5, description="Justification score from 1 to 5")
 
 
 class Annotation(BaseModel):
@@ -30,6 +38,10 @@ class Annotation(BaseModel):
     result_uid: int = Field(..., description="UID of the result being annotated")
     model: str = Field(..., description="Model name")
     notes: str = Field(default="", description="Free-form annotation notes")
+    preference_reasoning: str = Field(default="", description="Reasoning for preference score")
+    preference_score: Optional[float] = Field(None, description="Preference score from -1 to 1")
+    justification_reasoning: str = Field(default="", description="Reasoning for justification score")
+    justification_score: Optional[int] = Field(None, description="Justification score from 1 to 5")
     created_at: str = Field(..., description="ISO timestamp of creation")
     updated_at: str = Field(..., description="ISO timestamp of last update")
 
@@ -123,6 +135,10 @@ def create_or_update_annotation(data: AnnotationCreate):
     if existing_id:
         # Update existing
         annotations[existing_id]["notes"] = data.notes
+        annotations[existing_id]["preference_reasoning"] = data.preference_reasoning
+        annotations[existing_id]["preference_score"] = data.preference_score
+        annotations[existing_id]["justification_reasoning"] = data.justification_reasoning
+        annotations[existing_id]["justification_score"] = data.justification_score
         annotations[existing_id]["updated_at"] = now
         _save_annotations(annotations)
         return {"annotation": annotations[existing_id], "created": False}
@@ -134,6 +150,10 @@ def create_or_update_annotation(data: AnnotationCreate):
             "result_uid": data.result_uid,
             "model": data.model,
             "notes": data.notes,
+            "preference_reasoning": data.preference_reasoning,
+            "preference_score": data.preference_score,
+            "justification_reasoning": data.justification_reasoning,
+            "justification_score": data.justification_score,
             "created_at": now,
             "updated_at": now,
         }
@@ -152,6 +172,14 @@ def update_annotation(annotation_id: str, data: AnnotationUpdate):
     now = datetime.utcnow().isoformat() + "Z"
     if data.notes is not None:
         annotations[annotation_id]["notes"] = data.notes
+    if data.preference_reasoning is not None:
+        annotations[annotation_id]["preference_reasoning"] = data.preference_reasoning
+    if data.preference_score is not None:
+        annotations[annotation_id]["preference_score"] = data.preference_score
+    if data.justification_reasoning is not None:
+        annotations[annotation_id]["justification_reasoning"] = data.justification_reasoning
+    if data.justification_score is not None:
+        annotations[annotation_id]["justification_score"] = data.justification_score
     annotations[annotation_id]["updated_at"] = now
     
     _save_annotations(annotations)
