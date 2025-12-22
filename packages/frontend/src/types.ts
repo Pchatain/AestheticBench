@@ -46,3 +46,33 @@ export interface PlaygroundResponse {
   response: string
   model: string
 }
+
+export interface Annotation {
+  id: string
+  result_uid: number
+  model: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AnnotationCreate {
+  result_uid: number
+  model: string
+  notes: string
+}
+
+export interface AnnotationsResponse {
+  annotations: Annotation[]
+  total: number
+}
+
+export interface AnnotationLookupResponse {
+  annotation: Annotation | null
+  found: boolean
+}
+
+export interface AnnotationSaveResponse {
+  annotation: Annotation
+  created: boolean
+}

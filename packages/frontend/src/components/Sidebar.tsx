@@ -5,6 +5,7 @@ interface SidebarProps {
 
 const pages = [
   { id: 'results', label: 'Sample Viewer', icon: '📊' },
+  { id: 'annotator', label: 'Annotator', icon: '✏️' },
   { id: 'comparison', label: 'Model Comparison', icon: '🕸️' },
   { id: 'analytics', label: 'Analytics', icon: '📈' },
   { id: 'prompts', label: 'Grader Prompts', icon: '📝' },
