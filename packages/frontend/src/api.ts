@@ -1,4 +1,4 @@
-import type { GradesSummaryResponse, HeadersResponse, ModelsResponse, PlaygroundResponse, ResultsResponse, TopicsResponse } from './types'
+import type { AnnotationCreate, AnnotationLookupResponse, AnnotationsResponse, AnnotationSaveResponse, GradesSummaryResponse, HeadersResponse, ModelsResponse, PlaygroundResponse, ResultsResponse, TopicsResponse } from './types'
 
 const API_BASE = '/api'
 
@@ -58,4 +58,44 @@ export async function runPrompt(prompt: string, model: string): Promise<Playgrou
     throw new Error(error.detail || 'Failed to run prompt')
   }
   return res.json()
+}
+
+export async function fetchAnnotations(params?: {
+  result_uid?: number
+  model?: string
+}): Promise<AnnotationsResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.result_uid !== undefined) searchParams.set('result_uid', String(params.result_uid))
+  if (params?.model) searchParams.set('model', params.model)
+  const res = await fetch(`${API_BASE}/annotations?${searchParams}`)
+  return res.json()
+}
+
+export async function lookupAnnotation(result_uid: number, model: string): Promise<AnnotationLookupResponse> {
+  const params = new URLSearchParams({ result_uid: String(result_uid), model })
+  const res = await fetch(`${API_BASE}/annotations/lookup?${params}`)
+  return res.json()
+}
+
+export async function saveAnnotation(data: AnnotationCreate): Promise<AnnotationSaveResponse> {
+  const res = await fetch(`${API_BASE}/annotations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to save annotation')
+  }
+  return res.json()
+}
+
+export async function deleteAnnotation(annotationId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/annotations/${annotationId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to delete annotation')
+  }
 }

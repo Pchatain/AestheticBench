@@ -6,6 +6,7 @@ import { ModelComparison } from './components/ModelComparison'
 import { Analytics } from './components/Analytics'
 import { PlaygroundSidebar } from './components/Playground'
 import { GraderPrompts } from './components/GraderPrompts'
+import { Annotator } from './components/Annotator'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
 import type { Model, Result } from './types'
 
@@ -70,6 +71,7 @@ function App() {
             <ResultsTable results={results} headers={headers} loading={loading} />
           </>
         )}
+        {currentPage === 'annotator' && <Annotator />}
         {currentPage === 'comparison' && <ModelComparison />}
         {currentPage === 'analytics' && <Analytics />}
         {currentPage === 'prompts' && <GraderPrompts />}
