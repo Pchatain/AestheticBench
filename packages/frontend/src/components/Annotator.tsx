@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { fetchModels, fetchTopics, fetchResults, lookupAnnotation, saveAnnotation } from '../api'
+import { fetchModels, fetchTopics, fetchResults, fetchAnnotations, lookupAnnotation, saveAnnotation } from '../api'
 import type { Model, Result, Annotation } from '../types'
 
 interface AnnotationModalProps {
@@ -118,6 +118,8 @@ export function Annotator() {
     fetchTopics().then((data) => setTopics(data.topics))
   }, [])
 
+  const getCacheKey = (uid: number, model: string) => `${uid}:${model}`
+
   const loadResults = useCallback(async () => {
     if (selectedModels.length === 0) {
       setResults([])
@@ -150,6 +152,16 @@ export function Annotator() {
     }
 
     setResults(Object.values(allResultsByQuestion))
+
+    // Fetch existing annotations to populate cache
+    const annotationsData = await fetchAnnotations()
+    const cache: Record<string, Annotation> = {}
+    for (const ann of annotationsData.annotations) {
+      const key = getCacheKey(ann.result_uid, ann.model)
+      cache[key] = ann
+    }
+    setAnnotationsCache(cache)
+
     setLoading(false)
   }, [selectedModels, selectedTopic, searchQuery])
 
@@ -165,8 +177,6 @@ export function Annotator() {
         : [...prev, modelName]
     )
   }
-
-  const getCacheKey = (uid: number, model: string) => `${uid}:${model}`
 
   const handleCellClick = async (result: Result, model: string) => {
     const uid = result[`uid_${model}`] as number
