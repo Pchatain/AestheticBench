@@ -254,13 +254,12 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
 export function Annotator() {
   const [models, setModels] = useState<Model[]>([])
   const [topics, setTopics] = useState<string[]>([])
-  const { selectedModels, toggleModel } = useAppStore()
+  const { selectedModels, toggleModel, rowHeight, setRowHeight } = useAppStore()
   const [selectedTopic, setSelectedTopic] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
   const [loading, setLoading] = useState(false)
   const [annotationsCache, setAnnotationsCache] = useState<Record<string, Annotation>>({})
-  const [rowHeight, setRowHeight] = useState(80)
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -303,6 +302,9 @@ export function Annotator() {
         }
         allResultsByQuestion[question][`response_${model}`] = result['Model Response']
         allResultsByQuestion[question][`uid_${model}`] = result.uid
+        allResultsByQuestion[question][`p1_${model}`] = result['Preference_1_Score']
+        allResultsByQuestion[question][`p2_${model}`] = result['Preference_2_Score']
+        allResultsByQuestion[question][`j_${model}`] = result['Justification_Score']
       }
     }
 
@@ -513,6 +515,11 @@ export function Annotator() {
                       const uid = result[`uid_${model}`] as number
                       const cacheKey = uid ? getCacheKey(uid, model) : ''
                       const annotation = cacheKey ? annotationsCache[cacheKey] : undefined
+                      const p1 = result[`p1_${model}`]
+                      const p2 = result[`p2_${model}`]
+                      const jScore = result[`j_${model}`]
+                      const hasL1Scores = p1 !== undefined || p2 !== undefined || jScore !== undefined
+                      const hasAnnotatorScores = annotation && (annotation.preference_score !== null || annotation.justification_score !== null)
                       return (
                         <td key={model} className="px-4 py-2 align-top">
                           <button
@@ -532,13 +539,27 @@ export function Annotator() {
                                   maxHeight={rowHeight - 40} 
                                 />
                               </div>
-                              {annotation && (annotation.preference_score !== null || annotation.justification_score !== null) && (
-                                <div className="flex flex-col items-end text-xs text-gray-500 shrink-0">
-                                  {annotation.preference_score !== null && (
-                                    <span title="Preference Score">P: {annotation.preference_score}</span>
+                              {(hasL1Scores || hasAnnotatorScores) && (
+                                <div className="flex flex-col items-end text-xs shrink-0 gap-1">
+                                  {hasL1Scores && (
+                                    <div className="flex flex-col items-end text-blue-600">
+                                      {p1 !== undefined && <span title="L1 Preference 1">p1: {p1}</span>}
+                                      {p2 !== undefined && <span title="L1 Preference 2">p2: {p2}</span>}
+                                      {jScore !== undefined && <span title="L1 Justification">j: {jScore}</span>}
+                                    </div>
                                   )}
-                                  {annotation.justification_score !== null && (
-                                    <span title="Justification Score">J: {annotation.justification_score}</span>
+                                  {hasL1Scores && hasAnnotatorScores && (
+                                    <div className="w-full border-t border-gray-300 my-0.5" />
+                                  )}
+                                  {hasAnnotatorScores && (
+                                    <div className="flex flex-col items-end text-gray-500">
+                                      {annotation.preference_score !== null && (
+                                        <span title="Annotator Preference">P: {annotation.preference_score}</span>
+                                      )}
+                                      {annotation.justification_score !== null && (
+                                        <span title="Annotator Justification">J: {annotation.justification_score}</span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               )}
