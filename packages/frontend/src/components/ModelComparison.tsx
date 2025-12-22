@@ -37,7 +37,7 @@ interface ChartDataPoint {
 export function ModelComparison() {
   const [models, setModels] = useState<Model[]>([])
   const [topics, setTopics] = useState<string[]>([])
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const { selectedModels, toggleModel, setSelectedModels } = useAppStore()
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [summaries, setSummaries] = useState<GradesSummary[]>([])
   const [topicCounts, setTopicCounts] = useState<Record<string, number>>({})
@@ -97,11 +97,7 @@ export function ModelComparison() {
   })
 
   const handleModelToggle = (modelName: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelName)
-        ? prev.filter((m) => m !== modelName)
-        : [...prev, modelName]
-    )
+    toggleModel(modelName)
   }
 
   const handleTopicToggle = (topic: string) => {
