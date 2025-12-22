@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { fetchModels, fetchTopics, fetchGradesSummary } from '../api'
 import type { Model, GradesSummary } from '../types'
+import { useAppStore } from '../store'
 
 const COLORS = [
   '#8884d8',

@@ -1,6 +1,67 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react'
 import { fetchModels, fetchTopics, fetchResults, fetchAnnotations, lookupAnnotation, saveAnnotation } from '../api'
 import type { Model, Result, Annotation } from '../types'
+import { useAppStore } from '../store'
+
+interface MiddleTruncateProps {
+  text: string
+  maxHeight: number
+}
+
+function MiddleTruncateText({ text, maxHeight }: MiddleTruncateProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const [truncatedText, setTruncatedText] = useState(text)
+
+  useLayoutEffect(() => {
+    if (!containerRef.current || !measureRef.current || !text) {
+      setTruncatedText(text || 'N/A')
+      return
+    }
+
+    const measureEl = measureRef.current
+    measureEl.style.visibility = 'hidden'
+    measureEl.style.position = 'absolute'
+    measureEl.style.whiteSpace = 'pre-wrap'
+    measureEl.textContent = text
+
+    // If full text fits, show it all
+    if (measureEl.scrollHeight <= maxHeight) {
+      setTruncatedText(text)
+      return
+    }
+
+    // Find first sentence
+    const sentenceMatch = text.match(/^[^.!?]*[.!?]/)
+    const firstSentence = sentenceMatch ? sentenceMatch[0].trim() : text.slice(0, 80).trim()
+
+    // Binary search for how much of the end fits
+    const availableHeight = maxHeight - 40 // Reserve space for first sentence + ellipsis
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim())
+    
+    let endText = ''
+    for (let i = paragraphs.length - 1; i >= 0; i--) {
+      const candidate = paragraphs[i].trim() + (endText ? '\n\n' + endText : '')
+      measureEl.textContent = candidate
+      if (measureEl.scrollHeight > availableHeight) break
+      endText = candidate
+    }
+
+    if (!endText) {
+      // Just show first sentence if nothing else fits
+      setTruncatedText(firstSentence + '\n...')
+    } else {
+      setTruncatedText(firstSentence + '\n\n...\n\n' + endText)
+    }
+  }, [text, maxHeight])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div ref={measureRef} className="invisible absolute w-full" />
+      <div className="whitespace-pre-wrap">{truncatedText}</div>
+    </div>
+  )
+}
 
 interface AnnotationData {
   notes: string
@@ -78,9 +139,9 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question</label>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-24 overflow-y-auto">
+            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded min-h-[60px] overflow-y-auto resize-y">
               {result.Question as string}
-            </p>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Model Response</label>
@@ -193,12 +254,13 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
 export function Annotator() {
   const [models, setModels] = useState<Model[]>([])
   const [topics, setTopics] = useState<string[]>([])
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const { selectedModels, toggleModel } = useAppStore()
   const [selectedTopic, setSelectedTopic] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
   const [loading, setLoading] = useState(false)
   const [annotationsCache, setAnnotationsCache] = useState<Record<string, Annotation>>({})
+  const [rowHeight, setRowHeight] = useState(80)
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -264,11 +326,7 @@ export function Annotator() {
   }, [loadResults])
 
   const handleModelToggle = (modelName: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelName)
-        ? prev.filter((m) => m !== modelName)
-        : [...prev, modelName]
-    )
+    toggleModel(modelName)
   }
 
   const handleCellClick = async (result: Result, model: string) => {
@@ -397,8 +455,20 @@ export function Annotator() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm text-gray-700">{results.length} questions</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Row height:</span>
+              <input
+                type="range"
+                min="60"
+                max="300"
+                value={rowHeight}
+                onChange={(e) => setRowHeight(Number(e.target.value))}
+                className="w-32 cursor-pointer"
+              />
+              <span className="text-xs text-gray-500 w-10">{rowHeight}px</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -425,39 +495,58 @@ export function Annotator() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {results.slice(0, 50).map((result, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-500">{idx + 1}</td>
-                    <td className="px-4 py-3 text-sm max-w-md">
-                      <span className="line-clamp-2">{result.Question as string}</span>
+                  <tr key={idx} className="hover:bg-gray-50" style={{ height: rowHeight }}>
+                    <td className="px-4 py-2 text-sm text-gray-500 align-top">{idx + 1}</td>
+                    <td className="px-4 py-2 text-sm max-w-md align-top">
+                      <div className="overflow-hidden" style={{ maxHeight: rowHeight - 16 }}>
+                        {result.Question as string}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2 align-top">
                       {result.Topic && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
                           {result.Topic as string}
                         </span>
                       )}
                     </td>
-                    {selectedModels.map((model) => (
-                      <td key={model} className="px-4 py-3">
-                        <button
-                          onClick={() => handleCellClick(result, model)}
-                          className={`w-full text-left p-2 rounded border text-sm hover:bg-gray-100 ${
-                            hasAnnotation(result, model)
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200'
-                          }`}
-                          title="Click to annotate"
-                        >
-                          <span className="line-clamp-3 text-gray-700">
-                            {(result[`response_${model}`] as string)?.slice(0, 150) || 'N/A'}
-                            {(result[`response_${model}`] as string)?.length > 150 && '...'}
-                          </span>
-                          {hasAnnotation(result, model) && (
-                            <span className="block mt-1 text-xs text-green-600">Annotated</span>
-                          )}
-                        </button>
-                      </td>
-                    ))}
+                    {selectedModels.map((model) => {
+                      const uid = result[`uid_${model}`] as number
+                      const cacheKey = uid ? getCacheKey(uid, model) : ''
+                      const annotation = cacheKey ? annotationsCache[cacheKey] : undefined
+                      return (
+                        <td key={model} className="px-4 py-2 align-top">
+                          <button
+                            onClick={() => handleCellClick(result, model)}
+                            className={`w-full text-left p-2 rounded border text-sm hover:bg-gray-100 ${
+                              hasAnnotation(result, model)
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200'
+                            }`}
+                            style={{ height: rowHeight - 16 }}
+                            title="Click to annotate"
+                          >
+                            <div className="flex gap-2 h-full">
+                              <div className="flex-1 overflow-hidden text-gray-700">
+                                <MiddleTruncateText 
+                                  text={result[`response_${model}`] as string || 'N/A'} 
+                                  maxHeight={rowHeight - 40} 
+                                />
+                              </div>
+                              {annotation && (annotation.preference_score !== null || annotation.justification_score !== null) && (
+                                <div className="flex flex-col items-end text-xs text-gray-500 shrink-0">
+                                  {annotation.preference_score !== null && (
+                                    <span title="Preference Score">P: {annotation.preference_score}</span>
+                                  )}
+                                  {annotation.justification_score !== null && (
+                                    <span title="Justification Score">J: {annotation.justification_score}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
