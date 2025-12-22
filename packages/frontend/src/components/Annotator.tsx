@@ -2,24 +2,44 @@ import { useEffect, useState, useCallback } from 'react'
 import { fetchModels, fetchTopics, fetchResults, fetchAnnotations, lookupAnnotation, saveAnnotation } from '../api'
 import type { Model, Result, Annotation } from '../types'
 
+interface AnnotationData {
+  notes: string
+  preference_reasoning: string
+  preference_score: number | null
+  justification_reasoning: string
+  justification_score: number | null
+}
+
 interface AnnotationModalProps {
   isOpen: boolean
   result: Result | null
   model: string
   existingAnnotation: Annotation | null
-  onSave: (notes: string) => void
+  onSave: (data: AnnotationData) => void
   onClose: () => void
 }
 
 function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, onClose }: AnnotationModalProps) {
   const [notes, setNotes] = useState('')
+  const [preferenceReasoning, setPreferenceReasoning] = useState('')
+  const [preferenceScore, setPreferenceScore] = useState<string>('')
+  const [justificationReasoning, setJustificationReasoning] = useState('')
+  const [justificationScore, setJustificationScore] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (existingAnnotation) {
-      setNotes(existingAnnotation.notes)
+      setNotes(existingAnnotation.notes || '')
+      setPreferenceReasoning(existingAnnotation.preference_reasoning || '')
+      setPreferenceScore(existingAnnotation.preference_score !== null ? String(existingAnnotation.preference_score) : '')
+      setJustificationReasoning(existingAnnotation.justification_reasoning || '')
+      setJustificationScore(existingAnnotation.justification_score !== null ? String(existingAnnotation.justification_score) : '')
     } else {
       setNotes('')
+      setPreferenceReasoning('')
+      setPreferenceScore('')
+      setJustificationReasoning('')
+      setJustificationScore('')
     }
   }, [existingAnnotation, isOpen])
 
@@ -28,7 +48,13 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onSave(notes)
+      await onSave({
+        notes,
+        preference_reasoning: preferenceReasoning,
+        preference_score: preferenceScore !== '' ? parseFloat(preferenceScore) : null,
+        justification_reasoning: justificationReasoning,
+        justification_score: justificationScore !== '' ? parseInt(justificationScore) : null,
+      })
     } finally {
       setSaving(false)
     }
@@ -37,7 +63,7 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h3 className="text-lg font-semibold">
             Annotate Response - {model}
@@ -52,25 +78,92 @@ function AnnotationModal({ isOpen, result, model, existingAnnotation, onSave, on
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question</label>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-24 overflow-y-auto">
               {result.Question as string}
             </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Model Response</label>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded min-h-[120px] max-h-[300px] overflow-y-auto whitespace-pre-wrap resize-y">
               {result[`response_${model}`] as string || result['Model Response'] as string || 'N/A'}
-            </p>
+            </div>
           </div>
+
+          {/* Preference Section */}
+          <div className="border rounded-lg p-4 bg-blue-50">
+            <h4 className="font-medium text-gray-800 mb-3">Preference Score (-1 to 1)</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning</label>
+                <textarea
+                  value={preferenceReasoning}
+                  onChange={(e) => setPreferenceReasoning(e.target.value)}
+                  placeholder="Explain your reasoning for the preference score..."
+                  className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+                  rows={1}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Score</label>
+                <input
+                  type="number"
+                  min="-1"
+                  max="1"
+                  step="0.1"
+                  value={preferenceScore}
+                  onChange={(e) => setPreferenceScore(e.target.value)}
+                  placeholder="-1 to 1"
+                  className="w-32 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                <span className="ml-2 text-xs text-gray-500">(-1 = strongly disagree, 0 = neutral, 1 = strongly agree)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Justification Section */}
+          <div className="border rounded-lg p-4 bg-green-50">
+            <h4 className="font-medium text-gray-800 mb-3">Justification Score (1 to 5)</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning</label>
+                <textarea
+                  value={justificationReasoning}
+                  onChange={(e) => setJustificationReasoning(e.target.value)}
+                  placeholder="Explain your reasoning for the justification score..."
+                  className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+                  rows={1}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Score</label>
+                <select
+                  value={justificationScore}
+                  onChange={(e) => setJustificationScore(e.target.value)}
+                  className="w-32 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">Select...</option>
+                  <option value="1">1 - Poor</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="3">3 - Good</option>
+                  <option value="4">4 - Very Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* General Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Annotation Notes</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Enter your annotation notes here..."
-              className="w-full h-40 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Any additional notes..."
+              className="w-full min-h-[32px] p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm"
+              rows={1}
             />
           </div>
+
           {existingAnnotation && (
             <p className="text-xs text-gray-500">
               Last updated: {new Date(existingAnnotation.updated_at).toLocaleString()}
@@ -201,14 +294,20 @@ export function Annotator() {
     setModalOpen(true)
   }
 
-  const handleSaveAnnotation = async (notes: string) => {
+  const handleSaveAnnotation = async (data: {
+    notes: string
+    preference_reasoning: string
+    preference_score: number | null
+    justification_reasoning: string
+    justification_score: number | null
+  }) => {
     if (!modalResult || !modalModel) return
 
     const uid = modalResult[`uid_${modalModel}`] as number
     const response = await saveAnnotation({
       result_uid: uid,
       model: modalModel,
-      notes,
+      ...data,
     })
 
     const cacheKey = getCacheKey(uid, modalModel)
@@ -220,7 +319,11 @@ export function Annotator() {
     const uid = result[`uid_${model}`] as number
     if (!uid) return false
     const cacheKey = getCacheKey(uid, model)
-    return cacheKey in annotationsCache && annotationsCache[cacheKey].notes.length > 0
+    if (!(cacheKey in annotationsCache)) return false
+    const ann = annotationsCache[cacheKey]
+    return (ann.notes?.length > 0) || 
+           (ann.preference_score !== null) || 
+           (ann.justification_score !== null)
   }
 
   return (
