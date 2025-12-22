@@ -4,6 +4,8 @@ interface AppStore {
   selectedModels: string[]
   setSelectedModels: (models: string[]) => void
   toggleModel: (model: string) => void
+  rowHeight: number
+  setRowHeight: (height: number) => void
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -14,4 +16,6 @@ export const useAppStore = create<AppStore>((set) => ({
       ? state.selectedModels.filter((m) => m !== model)
       : [...state.selectedModels, model]
   })),
+  rowHeight: 80,
+  setRowHeight: (height) => set({ rowHeight: height }),
 }))
