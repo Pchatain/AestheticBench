@@ -113,19 +113,22 @@ def parse_graders_from_string(graders_str: str) -> list[str]:
     return graders
 
 
-def select_graders_interactive() -> list[str]:
-    """Prompt user to select which graders to run.
+def select_graders_interactive() -> tuple[list[str], str | None]:
+    """Prompt user to select which graders to run or write a custom prompt.
 
     Returns:
-        List of selected grader identifiers (e.g., ['preference1', 'justification'])
+        Tuple of (grader_ids, custom_prompt):
+        - grader_ids: List of selected grader identifiers (e.g., ['preference1'])
+        - custom_prompt: Custom grader prompt string, or None if using built-in graders
     """
     print("\n" + "=" * 70)
     print("SELECT GRADERS")
     print("=" * 70)
     print("\nAvailable graders:")
-    print("  1. preference1  - Categorical (-1, 0, 1) preference scoring")
-    print("  2. preference2  - Continuous [-1, 1] preference scoring")
+    print("  1. preference1   - Categorical (-1, 0, 1) preference scoring")
+    print("  2. preference2   - Continuous [-1, 1] preference scoring")
     print("  3. justification - Quality of justification (1-5 scale)")
+    print("  4. custom        - Write your own grader prompt")
     print("\nYou can select multiple graders (comma-separated).")
     print("Examples: '1,3' or 'preference1,justification' or 'all'\n")
 
@@ -133,9 +136,11 @@ def select_graders_interactive() -> list[str]:
         "1": "preference1",
         "2": "preference2",
         "3": "justification",
+        "4": "custom",
         "preference1": "preference1",
         "preference2": "preference2",
         "justification": "justification",
+        "custom": "custom",
         "all": ["preference1", "preference2", "justification"],
     }
 
@@ -143,15 +148,18 @@ def select_graders_interactive() -> list[str]:
 
     # Handle 'all' case
     if selection.strip().lower() == "all":
-        return grader_map["all"]
+        return grader_map["all"], None
 
     # Parse comma-separated input
     selected = []
+    has_custom = False
     for item in selection.split(","):
         item = item.strip().lower()
         if item in grader_map:
             value = grader_map[item]
-            if isinstance(value, list):
+            if value == "custom":
+                has_custom = True
+            elif isinstance(value, list):
                 selected.extend(value)
             else:
                 selected.append(value)
@@ -161,12 +169,234 @@ def select_graders_interactive() -> list[str]:
     # Remove duplicates while preserving order
     selected = list(dict.fromkeys(selected))
 
-    if not selected:
+    custom_prompt = None
+    if has_custom:
+        print("\n" + "-" * 70)
+        print("CUSTOM GRADER PROMPT")
+        print("-" * 70)
+        print("Enter your custom grading prompt. This will be used to evaluate responses.")
+        print("The prompt should describe how to score the response.")
+        print("(Press Enter twice to finish)\n")
+        
+        lines = []
+        while True:
+            line = input()
+            if line == "" and lines and lines[-1] == "":
+                lines.pop()  # Remove trailing empty line
+                break
+            lines.append(line)
+        
+        custom_prompt = "\n".join(lines)
+        if custom_prompt.strip():
+            print(f"\nCustom prompt set ({len(custom_prompt)} chars)")
+        else:
+            print("Warning: Empty custom prompt, will be ignored")
+            custom_prompt = None
+
+    if not selected and not custom_prompt:
         print("Error: No valid graders selected")
         raise typer.Exit(code=1)
 
-    print(f"\nSelected graders: {', '.join(selected)}")
-    return selected
+    if selected:
+        print(f"\nSelected graders: {', '.join(selected)}")
+    return selected, custom_prompt
+
+
+def discover_versions() -> list[str]:
+    """Discover available result versions in the results directory.
+
+    Returns:
+        List of version names sorted newest first (e.g., ['v2', 'v1', 'v0.1'])
+    """
+    results_dir = Path("results")
+    if not results_dir.exists():
+        return []
+
+    versions = []
+    for item in results_dir.iterdir():
+        if item.is_dir() and not item.name.startswith("."):
+            # Check if it has a responses subdirectory
+            if (item / "responses").exists():
+                versions.append(item.name)
+
+    # Sort versions: extract numeric parts for proper ordering
+    def version_key(v: str) -> tuple:
+        # Handle versions like 'v2', 'v1', 'v0.1'
+        parts = v.lstrip("v").split(".")
+        return tuple(int(p) if p.isdigit() else 0 for p in parts)
+
+    return sorted(versions, key=version_key, reverse=True)
+
+
+def select_version_interactive() -> str:
+    """Prompt user to select a version from available results.
+
+    Returns:
+        Selected version name (e.g., 'v2')
+    """
+    versions = discover_versions()
+
+    if not versions:
+        print("Error: No result versions found in results/ directory")
+        raise typer.Exit(code=1)
+
+    print("\n" + "=" * 70)
+    print("SELECT VERSION")
+    print("=" * 70)
+    print("\nAvailable versions (newest first):")
+
+    for idx, version in enumerate(versions, 1):
+        responses_dir = Path("results") / version / "responses"
+        file_count = len(list(responses_dir.glob("*.csv"))) if responses_dir.exists() else 0
+        print(f"  {idx}. {version} ({file_count} response files)")
+
+    print()
+    selection = typer.prompt("Select version (number or name)")
+
+    # Try as number first
+    try:
+        idx = int(selection) - 1
+        if 0 <= idx < len(versions):
+            selected = versions[idx]
+            print(f"\nSelected: {selected}")
+            return selected
+    except ValueError:
+        pass
+
+    # Try as name
+    if selection in versions:
+        print(f"\nSelected: {selection}")
+        return selection
+
+    print(f"Error: Invalid selection '{selection}'")
+    raise typer.Exit(code=1)
+
+
+def get_file_info(file_path: Path) -> dict:
+    """Extract info from a response file.
+
+    Args:
+        file_path: Path to response CSV file
+
+    Returns:
+        Dictionary with model name, date, and file path
+    """
+    import os
+    from datetime import datetime
+
+    name = file_path.stem
+    # Parse filename: {provider}_{model}_{date}_{time}.csv
+    parts = name.rsplit("_", 2)
+
+    if len(parts) >= 3:
+        model_name = parts[0]
+        date_str = parts[1]
+        time_str = parts[2]
+        try:
+            timestamp = datetime.strptime(f"{date_str}_{time_str}", "%Y-%m-%d_%H-%M-%S")
+            date_display = timestamp.strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            date_display = "Unknown date"
+    else:
+        model_name = name
+        date_display = "Unknown date"
+
+    # Get file size
+    size_bytes = file_path.stat().st_size
+    if size_bytes > 1024 * 1024:
+        size_display = f"{size_bytes / (1024 * 1024):.1f}MB"
+    elif size_bytes > 1024:
+        size_display = f"{size_bytes / 1024:.1f}KB"
+    else:
+        size_display = f"{size_bytes}B"
+
+    return {
+        "path": file_path,
+        "model": model_name,
+        "date": date_display,
+        "size": size_display,
+    }
+
+
+def select_files_interactive(version: str) -> list[Path]:
+    """Prompt user to select response files from a version.
+
+    Args:
+        version: Version name (e.g., 'v2')
+
+    Returns:
+        List of selected file paths
+    """
+    responses_dir = Path("results") / version / "responses"
+
+    if not responses_dir.exists():
+        print(f"Error: Responses directory not found: {responses_dir}")
+        raise typer.Exit(code=1)
+
+    files = sorted(responses_dir.glob("*.csv"))
+    if not files:
+        print(f"Error: No CSV files found in {responses_dir}")
+        raise typer.Exit(code=1)
+
+    # Get file info
+    file_infos = [get_file_info(f) for f in files]
+
+    print("\n" + "=" * 70)
+    print(f"SELECT RESPONSE FILES ({version})")
+    print("=" * 70)
+    print("\nAvailable response files:")
+
+    # Calculate column widths
+    max_model = max(len(info["model"]) for info in file_infos)
+    max_model = min(max_model, 45)  # Cap width
+
+    for idx, info in enumerate(file_infos, 1):
+        model = info["model"][:45]
+        print(f"  {idx:2}. {model:<{max_model}}  {info['date']}  ({info['size']})")
+
+    print("\nEnter file numbers (comma-separated) or 'all'")
+    print("Examples: '1,3,5' or '1-3' or 'all'\n")
+
+    selection = typer.prompt("Select files")
+
+    # Parse selection
+    selected_indices = set()
+
+    if selection.strip().lower() == "all":
+        selected_indices = set(range(len(files)))
+    else:
+        for part in selection.split(","):
+            part = part.strip()
+            if "-" in part:
+                # Range selection
+                try:
+                    start, end = part.split("-")
+                    for i in range(int(start) - 1, int(end)):
+                        if 0 <= i < len(files):
+                            selected_indices.add(i)
+                except ValueError:
+                    print(f"Warning: Invalid range '{part}', skipping...")
+            else:
+                # Single number
+                try:
+                    idx = int(part) - 1
+                    if 0 <= idx < len(files):
+                        selected_indices.add(idx)
+                    else:
+                        print(f"Warning: Index {part} out of range, skipping...")
+                except ValueError:
+                    print(f"Warning: Invalid selection '{part}', skipping...")
+
+    if not selected_indices:
+        print("Error: No valid files selected")
+        raise typer.Exit(code=1)
+
+    selected_files = [files[i] for i in sorted(selected_indices)]
+    print(f"\nSelected {len(selected_files)} file(s):")
+    for f in selected_files:
+        print(f"  - {f.name}")
+
+    return selected_files
 
 
 def validate_results_csv(file_path: Path) -> tuple[bool, str]:
@@ -484,9 +714,9 @@ def grade(
     results_pattern: Annotated[
         str,
         typer.Argument(
-            help="Path to results CSV file(s) to grade. Supports glob patterns (e.g., results/v2/responses/*.csv)"
+            help="Path to results CSV file(s) to grade. Supports glob patterns (e.g., results/v2/responses/*.csv). If not provided, enters interactive mode."
         ),
-    ],
+    ] = None,
     graders: Annotated[
         str,
         typer.Option(
@@ -519,7 +749,10 @@ def grade(
         ),
     ] = False,
 ):
-    """Grade model responses using specified grader prompts."""
+    """Grade model responses using specified grader prompts.
+    
+    If no arguments provided, enters interactive mode to select files and graders.
+    """
     import csv
     import glob
 
@@ -527,47 +760,62 @@ def grade(
     print("  MoralBench - Grade Model Responses")
     print("========================================\n")
 
-    # Expand glob pattern to get list of files
-    matched_files = sorted(glob.glob(results_pattern))
-    if not matched_files:
-        # Try as literal path
-        if Path(results_pattern).exists():
-            matched_files = [results_pattern]
-        else:
-            print(f"Error: No files found matching pattern: {results_pattern}")
-            raise typer.Exit(code=1)
+    custom_prompt = None
 
-    results_files = [Path(f) for f in matched_files]
-    print(f"Found {len(results_files)} file(s) to grade:")
-    for f in results_files:
-        print(f"  - {f}")
-    print()
-
-    # Validate all results CSVs have required columns
-    valid_files = []
-    for results_file in results_files:
-        is_valid, error_msg = validate_results_csv(results_file)
-        if not is_valid:
-            print(f"Warning: Skipping invalid CSV {results_file} - {error_msg}")
-        else:
-            valid_files.append(results_file)
-
-    if not valid_files:
-        print("Error: No valid results CSV files found")
-        raise typer.Exit(code=1)
-
-    results_files = valid_files
-
-    # Grader selection
-    if graders:
-        try:
-            grader_ids = parse_graders_from_string(graders)
-        except ValueError as e:
-            print(f"Error: {e}")
-            raise typer.Exit(code=1)
+    # Interactive mode if no results_pattern provided
+    if results_pattern is None:
+        print("No files specified - entering interactive mode...\n")
+        
+        # Step 1: Select version
+        version = select_version_interactive()
+        
+        # Step 2: Select files
+        results_files = select_files_interactive(version)
+        
+        # Step 3: Select graders (with custom prompt support)
+        grader_ids, custom_prompt = select_graders_interactive()
     else:
-        # Interactive selection
-        grader_ids = select_graders_interactive()
+        # Expand glob pattern to get list of files
+        matched_files = sorted(glob.glob(results_pattern))
+        if not matched_files:
+            # Try as literal path
+            if Path(results_pattern).exists():
+                matched_files = [results_pattern]
+            else:
+                print(f"Error: No files found matching pattern: {results_pattern}")
+                raise typer.Exit(code=1)
+
+        results_files = [Path(f) for f in matched_files]
+        print(f"Found {len(results_files)} file(s) to grade:")
+        for f in results_files:
+            print(f"  - {f}")
+        print()
+
+        # Validate all results CSVs have required columns
+        valid_files = []
+        for results_file in results_files:
+            is_valid, error_msg = validate_results_csv(results_file)
+            if not is_valid:
+                print(f"Warning: Skipping invalid CSV {results_file} - {error_msg}")
+            else:
+                valid_files.append(results_file)
+
+        if not valid_files:
+            print("Error: No valid results CSV files found")
+            raise typer.Exit(code=1)
+
+        results_files = valid_files
+
+        # Grader selection
+        if graders:
+            try:
+                grader_ids = parse_graders_from_string(graders)
+            except ValueError as e:
+                print(f"Error: {e}")
+                raise typer.Exit(code=1)
+        else:
+            # Interactive selection
+            grader_ids, custom_prompt = select_graders_interactive()
 
     # Dry-run mode: show what would be graded and estimate costs
     if dry_run:
@@ -583,16 +831,22 @@ def grade(
                 total_responses += count
                 print(f"  {results_file}: {count} responses")
 
+        # Calculate total graders (built-in + custom if present)
+        num_graders = len(grader_ids) + (1 if custom_prompt else 0)
+        grader_names = list(grader_ids) + (["custom"] if custom_prompt else [])
+
         print(f"\nTotal responses to grade: {total_responses}")
-        print(f"Graders to run: {', '.join(grader_ids)}")
-        print(f"Total grading calls: {total_responses * len(grader_ids)}")
+        print(f"Graders to run: {', '.join(grader_names)}")
+        if custom_prompt:
+            print(f"Custom prompt: {custom_prompt[:100]}{'...' if len(custom_prompt) > 100 else ''}")
+        print(f"Total grading calls: {total_responses * num_graders}")
         print(f"Grader model: {grader_model}")
 
         # Rough token estimates
         avg_input_tokens = 500  # prompt + question + response
         avg_output_tokens = 50  # just a score
-        total_input = total_responses * len(grader_ids) * avg_input_tokens
-        total_output = total_responses * len(grader_ids) * avg_output_tokens
+        total_input = total_responses * num_graders * avg_input_tokens
+        total_output = total_responses * num_graders * avg_output_tokens
 
         print(f"\nEstimated tokens:")
         print(f"  Input: ~{total_input:,}")
@@ -636,6 +890,7 @@ def grade(
                     output_dir=output_dir,
                     grader_ids=grader_ids,
                     grader_model=grader_model,
+                    custom_prompt=custom_prompt,
                 )
         except KeyboardInterrupt:
             print("\n\nProcess interrupted by user")
