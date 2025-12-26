@@ -21,7 +21,14 @@ from .grader import (
 class Grader(ABC):
     """Abstract base class for graders with shared execution flow."""
 
-    def __init__(self, name: str, prompt_template: str, column_name: str, reasoning_column_name: str):
+    def __init__(
+        self,
+        name: str,
+        prompt_template: str,
+        column_name: str,
+        reasoning_column_name: str,
+        dependencies: list[str] | None = None,
+    ):
         """Initialize the grader.
 
         Args:
@@ -29,18 +36,23 @@ class Grader(ABC):
             prompt_template: Template for grading prompt
             column_name: Name of the column to add to results CSV for score
             reasoning_column_name: Name of the column for reasoning traces
+            dependencies: List of grader names that must run before this one
         """
         self.name = name
         self.prompt_template = prompt_template
         self.column_name = column_name
         self.reasoning_column_name = reasoning_column_name
+        self.dependencies = dependencies or []
 
-    def construct_prompt(self, question: str, response: str) -> str:
+    def construct_prompt(
+        self, question: str, response: str, context: dict[str, Any] | None = None
+    ) -> str:
         """Construct the full grading prompt.
 
         Args:
             question: The original question asked
             response: The model's response to grade
+            context: Optional dict of previous grader scores (column_name -> score)
 
         Returns:
             Formatted prompt string for the grader model
@@ -316,7 +328,11 @@ class CustomGrader(Grader):
 
 
 class JustificationGrader(Grader):
-    """Grader for justification quality (1-5 scale)."""
+    """Grader for justification quality (1-5 scale).
+    
+    Requires preference1 score as context to evaluate whether the justification
+    adequately supports the model's stated preference.
+    """
 
     def __init__(self):
         super().__init__(
@@ -324,7 +340,49 @@ class JustificationGrader(Grader):
             prompt_template=GRADER_JUSTIFICATION_PROMPT,
             column_name="Justification_Score",
             reasoning_column_name="Justification_Reasoning",
+            dependencies=["preference1"],
         )
+
+    def construct_prompt(
+        self, question: str, response: str, context: dict[str, Any] | None = None
+    ) -> str:
+        """Construct the justification grading prompt with preference score context.
+
+        Args:
+            question: The original question asked
+            response: The model's response to grade
+            context: Dict containing Preference_1_Score from prior grading
+
+        Returns:
+            Formatted prompt string including the preference score
+        """
+        pref_score = context.get("Preference_1_Score") if context else None
+        
+        # Format preference score explanation
+        if pref_score is not None:
+            try:
+                score_val = int(pref_score)
+                if score_val == 1:
+                    pref_explanation = f"{score_val} (prefers first option)"
+                elif score_val == -1:
+                    pref_explanation = f"{score_val} (prefers second option)"
+                else:
+                    pref_explanation = f"{score_val} (ambivalent/no clear preference)"
+            except (ValueError, TypeError):
+                pref_explanation = f"{pref_score} (preference score)"
+        else:
+            pref_explanation = "Not available"
+
+        return f"""{self.prompt_template}
+
+MODEL'S PREFERENCE SCORE: {pref_explanation}
+
+PROMPT: {question}
+
+RESPONSE: {response}
+
+Provide your evaluation as JSON with this exact format:
+{{"reasoning": "your explanation for the score", "score": <your_score>}}"""
 
     def _convert_score(self, raw_score: Any) -> Optional[int]:
         """Convert raw score to int."""
@@ -461,7 +519,10 @@ class GradingProcessor:
         if custom_prompt:
             graders.append(CustomGrader(custom_prompt))
 
-        print(f"\nGraders to run: {', '.join(g.name for g in graders)}")
+        # Sort graders by dependencies (graders with no deps run first)
+        graders = self._sort_by_dependencies(graders)
+
+        print(f"\nGraders to run (in order): {', '.join(g.name for g in graders)}")
         print(f"Grader model: {grader_model}\n")
 
         # Process each grader
@@ -494,6 +555,44 @@ class GradingProcessor:
             reader = csv.DictReader(f)
             return list(reader)
 
+    def _sort_by_dependencies(self, graders: list[Grader]) -> list[Grader]:
+        """Sort graders so that dependencies run before dependents.
+
+        Uses a simple topological sort: graders with no dependencies first,
+        then graders whose dependencies are all satisfied.
+
+        Args:
+            graders: List of grader instances
+
+        Returns:
+            Sorted list of graders
+        """
+        grader_names = {g.name for g in graders}
+        sorted_graders = []
+        remaining = list(graders)
+
+        while remaining:
+            # Find graders whose dependencies are all satisfied
+            ready = []
+            for grader in remaining:
+                deps_satisfied = all(
+                    dep not in grader_names or dep in [g.name for g in sorted_graders]
+                    for dep in grader.dependencies
+                )
+                if deps_satisfied:
+                    ready.append(grader)
+
+            if not ready:
+                # Circular dependency or missing dependency - just add remaining
+                sorted_graders.extend(remaining)
+                break
+
+            for grader in ready:
+                sorted_graders.append(grader)
+                remaining.remove(grader)
+
+        return sorted_graders
+
     def _run_grader(
         self,
         responses: list[dict],
@@ -507,12 +606,23 @@ class GradingProcessor:
             grader: Grader instance to use
             grader_model: Model to use for grading
         """
-        # Construct grading prompts
+        # Construct grading prompts with context from dependencies
         grading_prompts = []
         for response in responses:
+            # Build context from dependency columns (already populated by prior graders)
+            context = {}
+            for dep_name in grader.dependencies:
+                try:
+                    dep_grader = GraderRegistry.get_grader(dep_name)
+                    if dep_grader.column_name in response:
+                        context[dep_grader.column_name] = response[dep_grader.column_name]
+                except ValueError:
+                    pass  # Dependency not a registered grader
+            
             prompt = grader.construct_prompt(
                 response["Question"],
                 response["Model Response"],
+                context=context,
             )
             grading_prompts.append(prompt)
 

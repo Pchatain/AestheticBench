@@ -87,6 +87,38 @@ def derive_grades_output_dir(results_file: Path) -> Path:
     return Path("results") / "grades"
 
 
+def ensure_grader_dependencies(grader_ids: list[str]) -> list[str]:
+    """Ensure required dependencies are included for each grader.
+
+    If justification is selected without preference1, automatically adds preference1.
+
+    Args:
+        grader_ids: List of grader identifiers
+
+    Returns:
+        Updated list with dependencies added (in proper order)
+    """
+    # Define dependencies: grader -> list of required graders
+    dependencies = {
+        "justification": ["preference1"],
+    }
+
+    result = list(grader_ids)
+    added = []
+
+    for grader in grader_ids:
+        if grader in dependencies:
+            for dep in dependencies[grader]:
+                if dep not in result:
+                    result.insert(0, dep)  # Add dependency at start
+                    added.append(dep)
+
+    if added:
+        print(f"Note: Auto-added required grader(s): {', '.join(added)}")
+
+    return result
+
+
 def parse_graders_from_string(graders_str: str) -> list[str]:
     """Parse comma-separated grader string.
 
@@ -94,7 +126,7 @@ def parse_graders_from_string(graders_str: str) -> list[str]:
         graders_str: Comma-separated grader names (e.g., "preference1,justification")
 
     Returns:
-        List of validated grader identifiers
+        List of validated grader identifiers (with dependencies auto-added)
 
     Raises:
         ValueError: If any grader name is invalid
@@ -110,7 +142,8 @@ def parse_graders_from_string(graders_str: str) -> list[str]:
             f"Valid options: {', '.join(valid_graders)}"
         )
 
-    return graders
+    # Ensure dependencies are included
+    return ensure_grader_dependencies(graders)
 
 
 def select_graders_interactive() -> tuple[list[str], str | None]:
@@ -127,7 +160,7 @@ def select_graders_interactive() -> tuple[list[str], str | None]:
     print("\nAvailable graders:")
     print("  1. preference1   - Categorical (-1, 0, 1) preference scoring")
     print("  2. preference2   - Continuous [-1, 1] preference scoring")
-    print("  3. justification - Quality of justification (1-5 scale)")
+    print("  3. justification - Quality of justification (1-5 scale) [requires preference1]")
     print("  4. custom        - Write your own grader prompt")
     print("\nYou can select multiple graders (comma-separated).")
     print("Examples: '1,3' or 'preference1,justification' or 'all'\n")
@@ -197,7 +230,9 @@ def select_graders_interactive() -> tuple[list[str], str | None]:
         print("Error: No valid graders selected")
         raise typer.Exit(code=1)
 
+    # Ensure dependencies are included for selected graders
     if selected:
+        selected = ensure_grader_dependencies(selected)
         print(f"\nSelected graders: {', '.join(selected)}")
     return selected, custom_prompt
 
