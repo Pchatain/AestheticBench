@@ -154,11 +154,14 @@ Grading results are saved to `results/<version>/grades/` with additional score c
 # Roadmap
 - [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
-    - [ ] Update the grades to include reasoning for the grade assigned.
-    - [ ] Update UI to display the reasoning for the grade assigned.
+    - [x] Update the grades to include reasoning for the grade assigned.
+    - [x] Update UI to display the reasoning for the grade assigned.
 
 ## Infra TODOs
 - [ ] Add ruff linting and formatting to the code
 - [ ] Cleanup architecture
+- [ ] Improve code architecture, cut down on the bloat.
+- [ ] Re-design the UI to look much better and sleeker. Make it look aesthetic. There are frontend
+    claude code modules I can download that should help with this. Use shadcn/ui for the components.
 - [ ] Add testing framework
-- [ ] Setup CI/CD to distribute this as a package
+- [ ] Setup CI/CD to distribute this as a package so people can run the benchmark easily.
