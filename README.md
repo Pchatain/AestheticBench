@@ -151,6 +151,9 @@ uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_t
 
 Grading results are saved to `results/<version>/grades/` with additional score columns appended to the original CSV data.
 
+This folder is now located in `packages/backend/data/results/...`. That is where all the data lives
+such that the backend can serve the data to the frontend.
+
 # Roadmap
 - [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
