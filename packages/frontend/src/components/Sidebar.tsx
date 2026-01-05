@@ -4,6 +4,7 @@ interface SidebarProps {
 }
 
 const pages = [
+  { id: 'command-center', label: 'Command Center', icon: '🚀' },
   { id: 'results', label: 'Sample Viewer', icon: '📊' },
   { id: 'annotator', label: 'Annotator', icon: '✏️' },
   { id: 'comparison', label: 'Model Comparison', icon: '🕸️' },
