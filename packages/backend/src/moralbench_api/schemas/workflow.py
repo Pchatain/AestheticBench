@@ -211,3 +211,26 @@ class CancelResponse(BaseModel):
     job_id: str
     cancelled: bool
     message: str
+
+
+# === Models Schemas ===
+
+
+class OpenRouterModel(BaseModel):
+    """Information about an OpenRouter model."""
+
+    id: str
+    name: str
+    description: str | None = None
+    context_length: int | None = None
+    pricing_prompt: float | None = None  # $ per 1M tokens
+    pricing_completion: float | None = None  # $ per 1M tokens
+    top_provider: str | None = None
+
+
+class ModelsResponse(BaseModel):
+    """Response for listing available models."""
+
+    models: list[OpenRouterModel]
+    cached: bool = False
+    cache_age_seconds: int | None = None

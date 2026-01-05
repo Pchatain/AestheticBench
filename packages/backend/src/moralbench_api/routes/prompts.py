@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from moral_bench.grader import (
+from moral_bench.grader_prompts import (
     GRADER_JUSTIFICATION_PROMPT,
     GRADER_PREFERENCE_PROMPT_1,
     GRADER_PREFERENCE_PROMPT_2,

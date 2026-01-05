@@ -11,7 +11,7 @@ from typing import Any, Optional
 from tqdm import tqdm
 
 from .client import OpenRouterClient
-from .grader import (
+from .grader_prompts import (
     GRADER_JUSTIFICATION_PROMPT,
     GRADER_PREFERENCE_PROMPT_1,
     GRADER_PREFERENCE_PROMPT_2,

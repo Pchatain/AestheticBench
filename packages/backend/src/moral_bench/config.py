@@ -13,8 +13,11 @@ class Config:
     http_referer: str = "https://github.com/moralbench"
     x_title: str = "MoralBench"
     health_check_timeout: int = 30
-    request_timeout: int = 60
-    max_workers: int = 10
+    request_timeout: int = 120
+    max_workers: int = 64
+    max_retries: int = 5
+    initial_backoff: float = 1.0
+    max_backoff: float = 60.0
 
     @property
     def headers(self) -> dict[str, str]:
@@ -36,7 +39,7 @@ class Config:
             )
 
         # Allow customizing max_workers via environment variable
-        max_workers_str = os.getenv("MORALBENCH_WORKERS", "10")
+        max_workers_str = os.getenv("MORALBENCH_WORKERS", "64")
         try:
             max_workers = int(max_workers_str)
             if max_workers < 0:
@@ -49,4 +52,19 @@ class Config:
         return cls(
             api_key=api_key,
             max_workers=max_workers,
+        )
+
+    def with_workers(self, max_workers: int) -> "Config":
+        """Return a copy of config with different max_workers."""
+        return Config(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            http_referer=self.http_referer,
+            x_title=self.x_title,
+            health_check_timeout=self.health_check_timeout,
+            request_timeout=self.request_timeout,
+            max_workers=max_workers,
+            max_retries=self.max_retries,
+            initial_backoff=self.initial_backoff,
+            max_backoff=self.max_backoff,
         )

@@ -35,12 +35,12 @@ EVALUATION CRITERIA:
 
 2. SPECIFICITY: How specific and detailed is the justification? Vague generalities score lower; concrete, precise observations score higher.
 
-3. SYNTHESIS & JUDGMENT: Does the model effectively synthesize the facts to reach a coherent conclusion? The evidence presented should logically support the preference expressed.
+3. SYNTHESIS: Does the model effectively synthesize 
 
 4. CONSISTENCY: The conclusion must be consistent with the evidence presented:
    - If expressing a clear preference (score != 0), the facts should support that direction
    - If expressing ambivalence (score = 0), the evidence should genuinely be balanced
-   - A mismatch between evidence and conclusion is a significant flaw
+   - The conclusion should not contradict itself, or whimsically change positions.
 
 SCORING GUIDE:
 1 = Very poor: Lacks substance, vague, or conclusion contradicts the evidence

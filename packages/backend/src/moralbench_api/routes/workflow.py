@@ -1,6 +1,8 @@
 """Workflow routes for discovery, estimation, and execution."""
 
+import json
 import os
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -21,6 +23,8 @@ from ..schemas.workflow import (
     GradingEstimateResponse,
     JobStartResponse,
     JobStatus,
+    ModelsResponse,
+    OpenRouterModel,
     PromptsFilesResponse,
     ResponseFileInfo,
     RunEstimateRequest,
@@ -29,20 +33,29 @@ from ..schemas.workflow import (
 from ..services.config_service import ConfigService
 from ..services.discovery import DiscoveryService
 from ..services.estimation import EstimationService
+from ..services.execution import ExecutionService, job_manager, JobStatus as ExecJobStatus
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 # Initialize services
-# Note: For discovery, we use the project root paths
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent.parent.parent
-RESULTS_PATH = PROJECT_ROOT / "results"
+# Results directory is set by run.sh via environment variable
+RESULTS_PATH = Path(os.environ["MORALBENCH_RESULTS_DIR"])
+PROJECT_ROOT = RESULTS_PATH.parent
 PROMPTS_PATH = PROJECT_ROOT / "prompts"
+# Backend data directory for caching
+BACKEND_DATA_PATH = Path(__file__).parent.parent.parent.parent / "data"
+MODELS_CACHE_FILE = BACKEND_DATA_PATH / "openrouter_models.json"
+MODELS_CACHE_MAX_AGE = 3600  # 1 hour
 
 discovery_service = DiscoveryService(
     results_base=RESULTS_PATH,
     prompts_base=PROMPTS_PATH,
 )
 config_service = ConfigService()
+execution_service = ExecutionService(
+    project_root=PROJECT_ROOT,
+    results_base=RESULTS_PATH,
+)
 
 
 def get_openrouter_client() -> OpenRouterClient:
@@ -102,6 +115,64 @@ def list_prompts() -> PromptsFilesResponse:
             for f in files
         ]
     )
+
+
+@router.get("/models", response_model=ModelsResponse)
+def list_models(refresh: bool = False) -> ModelsResponse:
+    """List available OpenRouter models with caching."""
+    cache_age = None
+    use_cache = False
+
+    # Check cache
+    if not refresh and MODELS_CACHE_FILE.exists():
+        try:
+            with open(MODELS_CACHE_FILE, "r") as f:
+                cache_data = json.load(f)
+            cache_time = cache_data.get("timestamp", 0)
+            cache_age = int(time.time() - cache_time)
+            if cache_age < MODELS_CACHE_MAX_AGE:
+                use_cache = True
+                models = [OpenRouterModel(**m) for m in cache_data.get("models", [])]
+                return ModelsResponse(models=models, cached=True, cache_age_seconds=cache_age)
+        except (json.JSONDecodeError, KeyError):
+            pass  # Invalid cache, fetch fresh
+
+    # Fetch from OpenRouter
+    with get_openrouter_client() as client:
+        raw_models = client.get_available_models()
+
+    if raw_models is None:
+        raise HTTPException(status_code=502, detail="Failed to fetch models from OpenRouter")
+
+    # Transform to our schema
+    models = []
+    for m in raw_models:
+        pricing = m.get("pricing", {})
+        models.append(
+            OpenRouterModel(
+                id=m.get("id", ""),
+                name=m.get("name", m.get("id", "")),
+                description=m.get("description"),
+                context_length=m.get("context_length"),
+                pricing_prompt=float(pricing.get("prompt", 0)) * 1_000_000 if pricing.get("prompt") else None,
+                pricing_completion=float(pricing.get("completion", 0)) * 1_000_000 if pricing.get("completion") else None,
+                top_provider=m.get("id", "").split("/")[0] if "/" in m.get("id", "") else None,
+            )
+        )
+
+    # Sort by provider then name
+    models.sort(key=lambda x: (x.top_provider or "", x.name))
+
+    # Save to cache
+    BACKEND_DATA_PATH.mkdir(parents=True, exist_ok=True)
+    cache_data = {
+        "timestamp": time.time(),
+        "models": [m.model_dump() for m in models],
+    }
+    with open(MODELS_CACHE_FILE, "w") as f:
+        json.dump(cache_data, f)
+
+    return ModelsResponse(models=models, cached=False, cache_age_seconds=None)
 
 
 # === Configuration Endpoints ===
@@ -224,37 +295,82 @@ def estimate_grading(request: GradeEstimateRequest) -> GradingEstimateResponse:
 
 
 # === Execution Endpoints ===
-# Note: Full execution with WebSocket streaming will be added in a later phase
-# For now, we provide placeholder endpoints
 
 
 @router.post("/run/start", response_model=JobStartResponse)
 def start_run(request: RunEstimateRequest) -> JobStartResponse:
-    """Start inference run (placeholder - full implementation with WebSocket coming)."""
-    # TODO: Implement background job execution with WebSocket streaming
-    raise HTTPException(
-        status_code=501,
-        detail="Execution not yet implemented. Use CLI: uv run python main.py run",
+    """Start inference run in background."""
+    prompts_path = Path(request.prompts_file)
+    if not prompts_path.is_absolute():
+        prompts_path = PROJECT_ROOT / prompts_path
+
+    if not prompts_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Prompts file not found: {request.prompts_file}"
+        )
+
+    job = execution_service.start_inference_job(
+        models=request.models,
+        prompts_file=prompts_path,
+        output_dir=None,  # Use default
     )
+
+    return JobStartResponse(job_id=job.id, status=job.status.value)
 
 
 @router.post("/grade/start", response_model=JobStartResponse)
 def start_grading(request: GradeEstimateRequest) -> JobStartResponse:
-    """Start grading run (placeholder - full implementation with WebSocket coming)."""
-    # TODO: Implement background job execution with WebSocket streaming
-    raise HTTPException(
-        status_code=501,
-        detail="Execution not yet implemented. Use CLI: uv run python main.py grade",
+    """Start grading run in background."""
+    # Resolve file paths
+    files = []
+    for f in request.files:
+        path = Path(f)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {f}")
+        files.append(path)
+
+    job = execution_service.start_grading_job(
+        files=files,
+        grader_ids=request.grader_ids,
+        grader_model=request.grader_model,
+        output_dir=None,  # Use default
+        custom_prompt=request.custom_prompt,
     )
+
+    return JobStartResponse(job_id=job.id, status=job.status.value)
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatus)
 def get_job_status(job_id: str) -> JobStatus:
-    """Get status of running job (placeholder)."""
-    raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    """Get status of running job."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    return JobStatus(
+        job_id=job.id,
+        status=job.status.value,
+        progress=job.progress,
+        current_step=job.current_step,
+        total_steps=job.total_steps,
+        current_step_index=job.current_step_index,
+        result=job.result,
+        error=job.error,
+    )
 
 
 @router.delete("/jobs/{job_id}", response_model=CancelResponse)
 def cancel_job(job_id: str) -> CancelResponse:
-    """Cancel running job (placeholder)."""
-    raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    """Cancel running job."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    cancelled = job_manager.cancel_job(job_id)
+    return CancelResponse(
+        job_id=job_id,
+        cancelled=cancelled,
+        message="Job cancelled" if cancelled else "Job could not be cancelled (already completed or failed)",
+    )

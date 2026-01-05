@@ -59,16 +59,26 @@ class DiscoveryService:
         versions = []
         for item in self.results_base.iterdir():
             if item.is_dir() and not item.name.startswith("."):
+                # Check for responses subdirectory first, otherwise look at root
                 responses_dir = item / "responses"
                 grades_dir = item / "grades"
 
                 if responses_dir.exists():
                     response_count = len(list(responses_dir.glob("*.csv")))
-                    grade_count = (
-                        len(list(grades_dir.glob("*.csv")))
-                        if grades_dir.exists()
-                        else 0
-                    )
+                else:
+                    # CSVs directly in version folder (excluding combined files)
+                    response_count = len([
+                        f for f in item.glob("*.csv")
+                        if not f.name.startswith("combined")
+                    ])
+
+                grade_count = (
+                    len(list(grades_dir.glob("*.csv")))
+                    if grades_dir.exists()
+                    else 0
+                )
+
+                if response_count > 0 or grade_count > 0:
                     versions.append(
                         VersionInfo(
                             name=item.name,
@@ -93,13 +103,22 @@ class DiscoveryService:
         Returns:
             List of ResponseFileInfo sorted by date (newest first).
         """
-        responses_dir = self.results_base / version / "responses"
+        version_dir = self.results_base / version
+        responses_dir = version_dir / "responses"
 
-        if not responses_dir.exists():
+        # Check for responses subdirectory first, otherwise use version root
+        if responses_dir.exists():
+            search_dir = responses_dir
+        elif version_dir.exists():
+            search_dir = version_dir
+        else:
             return []
 
         files = []
-        for file_path in responses_dir.glob("*.csv"):
+        for file_path in search_dir.glob("*.csv"):
+            # Skip combined files
+            if file_path.name.startswith("combined"):
+                continue
             info = self._get_file_info(file_path)
             files.append(info)
 
