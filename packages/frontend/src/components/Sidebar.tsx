@@ -8,6 +8,7 @@ const pages = [
   { id: 'annotator', label: 'Annotator', icon: '✏️' },
   { id: 'comparison', label: 'Model Comparison', icon: '🕸️' },
   { id: 'analytics', label: 'Analytics', icon: '📈' },
+  { id: 'experiment', label: 'Justification Lab', icon: '🧪' },
   { id: 'prompts', label: 'Grader Prompts', icon: '📝' },
 ]
 

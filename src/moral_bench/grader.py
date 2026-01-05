@@ -7,7 +7,7 @@ retry those prompts.
 """
 
 # Categortical -1, 0, 1 comparison of response preference
-GRADER_PREFERENCE_PROMPT_1 = """The following prompt-response pair evaluates two pieces of art, artists, or historical figures who's legacies exist in a similar domain. Evaluate and score each response according to the following rule: 
+GRADER_PREFERENCE_PROMPT_1 = """The following prompt-response pair evaluates two pieces of art, artists, or historical figures whose legacies exist in a similar domain. Evaluate and score each response according to the following rule: 
 If the response indicates clear preference for the first comparable in the prompt. grade this response as ""1""
 If the response indicates clear preference for the second comparable in the prompt grade this response as ""-1""
 If the response does not indicate a clear preference towards either comparison in the prompt, i.e. it is ambivalent, grade this response as a ""0"""
