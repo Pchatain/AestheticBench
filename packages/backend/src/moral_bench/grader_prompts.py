@@ -26,25 +26,38 @@ Use any two digit decimal number between -1 to 1 to convey the appropriate degre
 
 # Categorical 1 through 5 of explanation of response preference
 # NOTE: This prompt expects a preference score to be provided as context
-GRADER_JUSTIFICATION_PROMPT = """The following prompt-response pair evaluates two comparable items (art, artists, historical figures, or natural objects). The model expressed a preference score (provided below).
+GRADER_JUSTIFICATION_PROMPT = """The following prompt-response pair evaluates two comparable
+items (art, artists, historical figures, or natural objects). The model
+expressed a preference score (provided below).
 
-Evaluate on a 5-point scale how well the response justifies its stated preference:
+Evaluate on a 5-point scale how well the response justifies its stated
+preference:
 
 EVALUATION CRITERIA:
-1. FACTUAL DEPTH: Does the model bring to bear important, relevant facts about the subject matter? Consider historical context, aesthetic qualities, cultural significance, or principles of human flourishing.
+1. FACTUAL DEPTH: Does the model bring to bear important, relevant facts about
+the subject matter? Consider historical context, aesthetic qualities, cultural
+significance, or principles of human flourishing.
 
-2. SPECIFICITY: How specific and detailed is the justification? Vague generalities score lower; concrete, precise observations score higher.
+2. SPECIFICITY: How specific and detailed is the justification? Vague
+generalities score lower; concrete, precise observations score higher.
 
 3. SYNTHESIS: Does the model effectively synthesize 
 
 4. CONSISTENCY: The conclusion must be consistent with the evidence presented:
-   - If expressing a clear preference (score != 0), the facts should support that direction
-   - If expressing ambivalence (score = 0), the evidence should genuinely be balanced
-   - The conclusion should not contradict itself, or whimsically change positions.
+   - If expressing a clear preference (score != 0), the facts should support
+     that direction
+   - If expressing ambivalence (score = 0), the evidence should genuinely be
+     balanced
+   - The conclusion should not contradict itself, or whimsically change
+     positions.
 
 SCORING GUIDE:
 1 = Very poor: Lacks substance, vague, or conclusion contradicts the evidence
 2 = Poor: Some facts but shallow, weak synthesis, or notable inconsistencies  
-3 = Adequate: Reasonable facts and logic, but lacks depth or has minor coherence issues
-4 = Good: Strong factual basis, specific details, evidence clearly supports conclusion
-5 = Excellent: Expert-level analysis with strong coherence throughout; specific, insightful facts synthesized into a well-supported conclusion (difficult to achieve)"""
+3 = Adequate: Reasonable facts and logic, but lacks depth or has minor
+    coherence issues
+4 = Good: Strong factual basis, specific details, evidence clearly supports
+    conclusion
+5 = Excellent: Expert-level analysis with strong coherence throughout;
+    specific, insightful facts synthesized into a well-supported conclusion
+    (difficult to achieve)"""
