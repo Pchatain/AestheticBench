@@ -252,3 +252,84 @@ export interface OpenRouterModelsResponse {
   cached: boolean
   cache_age_seconds?: number | null
 }
+
+// === Justification Experiment types ===
+
+export interface ExperimentPrompt {
+  uid: number
+  question: string
+  topic: string
+}
+
+export interface ExperimentPromptsResponse {
+  prompts: ExperimentPrompt[]
+}
+
+export interface QuestionConfig {
+  id: string  // q1, q2, q3, q4
+  prompt: string
+  enabled: boolean
+}
+
+export interface DefaultQuestion {
+  name: string
+  prompt: string
+  output_type: string
+}
+
+export interface DefaultQuestionsResponse {
+  questions: Record<string, DefaultQuestion>
+}
+
+export interface MultiQuestionExperimentRequest {
+  response_models: string[]
+  grader_model: string
+  questions: QuestionConfig[]
+  prompt_uids: number[]
+}
+
+export interface SinglePairRequest {
+  model_name: string
+  uid: number
+  original_question: string
+  model_response: string
+  grader_model: string
+  questions: QuestionConfig[]
+}
+
+export interface PromptResult {
+  uid: number
+  model: string
+  question: string
+  response: string
+  q1_score: string | null
+  q1_response: string
+  q1_error: string | null
+  q2_score: string | null
+  q2_response: string
+  q2_error: string | null
+  q3_score: string | null
+  q3_response: string
+  q3_error: string | null
+  q4_score: string | null
+  q4_response: string
+  q4_error: string | null
+}
+
+export interface MultiQuestionExperimentResponse {
+  results: PromptResult[]
+  experiment_id: string
+  questions_run: string[]
+}
+
+export interface SaveMultiExperimentRequest {
+  experiment_id: string
+  results: PromptResult[]
+  questions: QuestionConfig[]
+  grader_model: string
+}
+
+export interface SaveExperimentResponse {
+  filepath: string
+  saved: boolean
+}

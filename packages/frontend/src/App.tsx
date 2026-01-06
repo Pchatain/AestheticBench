@@ -8,6 +8,7 @@ import { PlaygroundSidebar } from './components/Playground'
 import { GraderPrompts } from './components/GraderPrompts'
 import { Annotator } from './components/Annotator'
 import { CommandCenter } from './components/CommandCenter'
+import { JustificationExperiment } from './components/JustificationExperiment'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
 import type { Model, Result } from './types'
 
@@ -76,6 +77,7 @@ function App() {
         {currentPage === 'annotator' && <Annotator />}
         {currentPage === 'comparison' && <ModelComparison />}
         {currentPage === 'analytics' && <Analytics />}
+        {currentPage === 'experiment' && <JustificationExperiment />}
         {currentPage === 'prompts' && <GraderPrompts />}
       </main>
 

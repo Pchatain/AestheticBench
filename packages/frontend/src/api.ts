@@ -4,7 +4,9 @@ import type {
   AnnotationsResponse,
   AnnotationSaveResponse,
   CancelResponse,
+  DefaultQuestionsResponse,
   DryRunEstimateResponse,
+  ExperimentPromptsResponse,
   FileValidationResponse,
   FilesResponse,
   GraderPromptsResponse,
@@ -16,10 +18,16 @@ import type {
   JobStartResponse,
   JobStatus,
   ModelsResponse,
+  MultiQuestionExperimentRequest,
+  MultiQuestionExperimentResponse,
   OpenRouterModelsResponse,
   PlaygroundResponse,
+  PromptResult,
   PromptsFilesResponse,
   ResultsResponse,
+  SaveExperimentResponse,
+  SaveMultiExperimentRequest,
+  SinglePairRequest,
   TopicsResponse,
   VersionsResponse,
 } from './types'
@@ -183,6 +191,35 @@ export async function validateGraders(
   return res.json()
 }
 
+// === Multi-Question Experiment API ===
+
+export async function fetchExperimentPrompts(models?: string[]): Promise<ExperimentPromptsResponse> {
+  const params = new URLSearchParams()
+  if (models && models.length > 0) {
+    params.set('models', models.join(','))
+  }
+  const res = await fetch(`${API_BASE}/experiments/prompts?${params}`)
+  return res.json()
+}
+
+export async function fetchDefaultQuestions(): Promise<DefaultQuestionsResponse> {
+  const res = await fetch(`${API_BASE}/experiments/questions`)
+  return res.json()
+}
+
+export async function runMultiQuestionExperiment(request: MultiQuestionExperimentRequest): Promise<MultiQuestionExperimentResponse> {
+  const res = await fetch(`${API_BASE}/experiments/multi/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to run experiment')
+  }
+  return res.json()
+}
+
 export async function validateFiles(files: string[]): Promise<FileValidationResponse> {
   const res = await fetch(`${API_BASE}/workflow/files/validate`, {
     method: 'POST',
@@ -292,6 +329,32 @@ export async function fetchOpenRouterModels(refresh: boolean = false): Promise<O
   if (!res.ok) {
     const error = await res.json()
     throw new Error(error.detail || 'Failed to fetch OpenRouter models')
+  }
+  return res.json()
+}
+
+export async function gradeSinglePair(request: SinglePairRequest): Promise<PromptResult> {
+  const res = await fetch(`${API_BASE}/experiments/grade-single`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to grade pair')
+  }
+  return res.json()
+}
+
+export async function saveMultiExperimentResults(request: SaveMultiExperimentRequest): Promise<SaveExperimentResponse> {
+  const res = await fetch(`${API_BASE}/experiments/multi/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to save experiment')
   }
   return res.json()
 }
