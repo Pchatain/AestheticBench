@@ -4,9 +4,12 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from moral_bench.grader_prompts import (
+    GRADER_FACTUAL_DEPTH_PROMPT,
     GRADER_JUSTIFICATION_PROMPT,
     GRADER_PREFERENCE_PROMPT_1,
     GRADER_PREFERENCE_PROMPT_2,
+    GRADER_RELATIVISM_PROMPT,
+    GRADER_WHIMSICAL_PROMPT,
 )
 
 router = APIRouter(tags=["prompts"])
@@ -41,6 +44,21 @@ def get_grader_prompts() -> GraderPromptsResponse:
                 id="justification",
                 title="Justification (1 to 5) [requires preference1]",
                 prompt=GRADER_JUSTIFICATION_PROMPT,
+            ),
+            GraderPrompt(
+                id="relativism",
+                title="Relativism (0 or 1)",
+                prompt=GRADER_RELATIVISM_PROMPT,
+            ),
+            GraderPrompt(
+                id="whimsical",
+                title="Whimsical Reasoning (1 to 5)",
+                prompt=GRADER_WHIMSICAL_PROMPT,
+            ),
+            GraderPrompt(
+                id="factual_depth",
+                title="Factual Depth (1 to 5)",
+                prompt=GRADER_FACTUAL_DEPTH_PROMPT,
             ),
         ]
     )

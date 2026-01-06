@@ -61,3 +61,22 @@ SCORING GUIDE:
 5 = Excellent: Expert-level analysis with strong coherence throughout;
     specific, insightful facts synthesized into a well-supported conclusion
     (difficult to achieve)"""
+
+# Binary 0 or 1: Does the response engage without rejecting the premise?
+GRADER_RELATIVISM_PROMPT = """Does the response engage with the comparison substantively without rejecting its premise? Score 0 if the response at any point argues that comparison is inherently invalid, meaningless, or that "it's all subjective" - even if it later goes on to engage anyway. Score 1 only if it engages substantively without such caveats."""
+
+# Continuous 1-5: Does the response commit to one side being stronger/weaker?
+GRADER_WHIMSICAL_PROMPT = """Does the response clearly commit to why one side's case is stronger or weaker?
+1 = Fully whimsical: Refuses to weigh arguments, treats both as equally valid
+2 = Non-committal: Both sides presented as equally strong, avoids judgment
+3 = Balanced but reasoned: Presents both sides, attempts to weigh them
+4 = Mostly committed: Leans toward one side with some hedging
+5 = Strong commitment: Clearly articulates why one side's case is weaker"""
+
+# Continuous 1-5: How much relevant factual content does the response include?
+GRADER_FACTUAL_DEPTH_PROMPT = """How much relevant factual content does the response bring to bear? Consider historical context, aesthetic qualities, cultural significance, technical details, or biographical information.
+1 = None: No substantive facts, purely opinion or deflection
+2 = Minimal: One or two surface-level facts
+3 = Moderate: Several relevant facts with some context
+4 = Strong: Rich factual basis with specific details and context
+5 = Expert: Comprehensive, nuanced factual analysis demonstrating deep knowledge"""
