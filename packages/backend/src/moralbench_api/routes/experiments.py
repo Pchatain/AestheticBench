@@ -13,13 +13,14 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# Directory for saving experiment results
-EXPERIMENTS_DIR = Path(__file__).parents[3] / "data" / "experiments"
-EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Reuse data directories from results module
-DATA_DIR = Path(__file__).parents[3] / "data" / "results" / "v2"
+# Read from results directory set by run.sh
+RESULTS_DIR = Path(os.environ["MORALBENCH_RESULTS_DIR"])
+DATA_DIR = RESULTS_DIR / "v2"
 GRADES_DIR = DATA_DIR / "grades"
+
+# Directory for saving experiment results
+EXPERIMENTS_DIR = RESULTS_DIR / "experiments"
+EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Default question prompts
