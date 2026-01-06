@@ -12,9 +12,12 @@ from tqdm import tqdm
 
 from .client import OpenRouterClient
 from .grader_prompts import (
+    GRADER_FACTUAL_DEPTH_PROMPT,
     GRADER_JUSTIFICATION_PROMPT,
     GRADER_PREFERENCE_PROMPT_1,
     GRADER_PREFERENCE_PROMPT_2,
+    GRADER_RELATIVISM_PROMPT,
+    GRADER_WHIMSICAL_PROMPT,
 )
 
 
@@ -435,26 +438,157 @@ Provide your evaluation as JSON with this exact format:
             return False
 
 
+class RelativismGrader(Grader):
+    """Grader for relativism/premise rejection (0 or 1 scale)."""
+
+    def __init__(self):
+        super().__init__(
+            name="relativism",
+            prompt_template=GRADER_RELATIVISM_PROMPT,
+            column_name="Relativism_Score",
+            reasoning_column_name="Relativism_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse relativism score from grader response."""
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+            r'(?:^|\s)(\d+)(?:\s|$|\.)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate relativism score is 0 or 1."""
+        try:
+            return int(score) in {0, 1}
+        except (ValueError, TypeError):
+            return False
+
+
+class WhimsicalGrader(Grader):
+    """Grader for whimsical reasoning (1-5 scale)."""
+
+    def __init__(self):
+        super().__init__(
+            name="whimsical",
+            prompt_template=GRADER_WHIMSICAL_PROMPT,
+            column_name="Whimsical_Score",
+            reasoning_column_name="Whimsical_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse whimsical score from grader response."""
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+            r'(?:^|\s)(\d+)(?:\s|$|\.)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate whimsical score is between 1 and 5."""
+        try:
+            return 1 <= int(score) <= 5
+        except (ValueError, TypeError):
+            return False
+
+
+class FactualDepthGrader(Grader):
+    """Grader for factual depth (1-5 scale)."""
+
+    def __init__(self):
+        super().__init__(
+            name="factual_depth",
+            prompt_template=GRADER_FACTUAL_DEPTH_PROMPT,
+            column_name="Factual_Depth_Score",
+            reasoning_column_name="Factual_Depth_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse factual depth score from grader response."""
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+            r'(?:^|\s)(\d+)(?:\s|$|\.)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate factual depth score is between 1 and 5."""
+        try:
+            return 1 <= int(score) <= 5
+        except (ValueError, TypeError):
+            return False
+
+
 class GraderRegistry:
     """Factory for creating grader instances."""
 
     @staticmethod
     def get_grader(grader_id: str) -> Grader:
-        """Get a grader instance by ID.
-
-        Args:
-            grader_id: Identifier for the grader (preference1, preference2, justification)
-
-        Returns:
-            Configured grader instance
-
-        Raises:
-            ValueError: If grader_id is not recognized
-        """
+        """Get a grader instance by ID."""
         graders = {
             "preference1": Preference1Grader(),
             "preference2": Preference2Grader(),
             "justification": JustificationGrader(),
+            "relativism": RelativismGrader(),
+            "whimsical": WhimsicalGrader(),
+            "factual_depth": FactualDepthGrader(),
         }
 
         if grader_id not in graders:
@@ -467,12 +601,8 @@ class GraderRegistry:
 
     @staticmethod
     def list_graders() -> list[str]:
-        """List all available grader IDs.
-
-        Returns:
-            List of grader identifiers
-        """
-        return ["preference1", "preference2", "justification"]
+        """List all available grader IDs."""
+        return ["preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth"]
 
 
 class GradingProcessor:

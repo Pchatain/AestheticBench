@@ -174,6 +174,9 @@ export function Analytics() {
   const pref1Data = buildDiscreteHistogram('Preference_1_Score', [-1, 0, 1])
   const pref2Data = buildContinuousHistogram()
   const justificationData = buildDiscreteHistogram('Justification_Score', [1, 2, 3, 4, 5])
+  const relativismData = buildDiscreteHistogram('Relativism_Score', [0, 1])
+  const whimsicalData = buildDiscreteHistogram('Whimsical_Score', [1, 2, 3, 4, 5])
+  const factualDepthData = buildDiscreteHistogram('Factual_Depth_Score', [1, 2, 3, 4, 5])
 
   return (
     <div className="space-y-6">
@@ -338,6 +341,75 @@ export function Analytics() {
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={justificationData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" label={{ value: 'Score', position: 'insideBottom', offset: -5 }} />
+                  <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  {selectedModels.map((modelName) => (
+                    <Bar
+                      key={modelName}
+                      dataKey={modelName}
+                      fill={COLORS[models.findIndex((m) => m.name === modelName) % COLORS.length]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Relativism Histogram */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="font-semibold text-gray-700 mb-4">Relativism Distribution (0 = rejects premise, 1 = engages)</h3>
+            <div className="h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={relativismData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" label={{ value: 'Score', position: 'insideBottom', offset: -5 }} />
+                  <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  {selectedModels.map((modelName) => (
+                    <Bar
+                      key={modelName}
+                      dataKey={modelName}
+                      fill={COLORS[models.findIndex((m) => m.name === modelName) % COLORS.length]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Whimsical Histogram */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="font-semibold text-gray-700 mb-4">Whimsical Reasoning Distribution (1 = whimsical, 5 = committed)</h3>
+            <div className="h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={whimsicalData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" label={{ value: 'Score', position: 'insideBottom', offset: -5 }} />
+                  <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  {selectedModels.map((modelName) => (
+                    <Bar
+                      key={modelName}
+                      dataKey={modelName}
+                      fill={COLORS[models.findIndex((m) => m.name === modelName) % COLORS.length]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Factual Depth Histogram */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="font-semibold text-gray-700 mb-4">Factual Depth Distribution (1 = none, 5 = expert)</h3>
+            <div className="h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={factualDepthData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" label={{ value: 'Score', position: 'insideBottom', offset: -5 }} />
                   <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />

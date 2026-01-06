@@ -48,7 +48,7 @@ class FileValidationResult:
 class ConfigService:
     """Service for validation and configuration resolution."""
 
-    VALID_GRADERS = {"preference1", "preference2", "justification"}
+    VALID_GRADERS = {"preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth"}
 
     GRADER_DEPENDENCIES = {
         "justification": ["preference1"],
