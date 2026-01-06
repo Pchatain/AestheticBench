@@ -178,17 +178,11 @@ name = "moralbench"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "httpx" },
-    { name = "tqdm" },
-    { name = "typer" },
+    { name = "moralbench-api" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "tqdm", specifier = ">=4.66.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-]
+requires-dist = [{ name = "moralbench-api", editable = "packages/backend" }]
 
 [[package]]
 name = "moralbench-api"
@@ -198,6 +192,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pandas" },
+    { name = "tqdm" },
+    { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -206,6 +202,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pandas", specifier = ">=2.2.0" },
+    { name = "tqdm", specifier = ">=4.66.0" },
+    { name = "typer", specifier = ">=0.9.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 

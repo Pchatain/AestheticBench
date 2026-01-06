@@ -5,10 +5,11 @@ description = "Package to measure the morality of LLMs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "httpx>=0.27.0",
-    "typer>=0.9.0",
-    "tqdm>=4.66.0",
+    "moralbench-api",
 ]
 
 [tool.uv.workspace]
 members = ["packages/backend"]
+
+[tool.uv.sources]
+moralbench-api = { workspace = true }

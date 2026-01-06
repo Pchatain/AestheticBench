@@ -1,11 +1,36 @@
 """OpenRouter API client using httpx."""
 
 import httpx
+import random
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from tqdm import tqdm
-from typing import Optional
+from typing import Callable, Optional
 
 from .config import Config
+
+
+@dataclass
+class BatchStats:
+    """Statistics for a batch operation."""
+    total: int = 0
+    completed: int = 0
+    failed: int = 0
+    retries: int = 0
+    rate_limited: int = 0
+    current_concurrency: int = 64
+    
+    def to_dict(self) -> dict:
+        return {
+            "total": self.total,
+            "completed": self.completed,
+            "failed": self.failed,
+            "retries": self.retries,
+            "rate_limited": self.rate_limited,
+            "current_concurrency": self.current_concurrency,
+        }
 
 
 class OpenRouterClient:
@@ -178,14 +203,16 @@ class OpenRouterClient:
         messages: list[str],
         model: str = "openai/gpt-4o",
         max_workers: Optional[int] = None,
+        on_status: Optional[Callable[[BatchStats], None]] = None,
     ) -> list[tuple[int, str, Optional[str]]]:
-        """Send multiple chat completion requests in parallel using ThreadPoolExecutor.
+        """Send multiple chat completion requests in parallel with adaptive rate limiting.
 
         Args:
             messages: List of messages to send to the model.
             model: The model to use for completions.
-            max_workers: Number of concurrent workers. If 0, run sequentially.
-                        If None, use config.max_workers.
+            max_workers: Initial number of concurrent workers. If 0, run sequentially.
+                        If None, use config.max_workers (default 64).
+            on_status: Optional callback for status updates (rate limits, backoffs).
 
         Returns:
             List of tuples (index, message, response) where response is None if error occurred.
@@ -193,7 +220,13 @@ class OpenRouterClient:
         if max_workers is None:
             max_workers = self.config.max_workers
 
-        results = []
+        results: list[tuple[int, str, Optional[str]]] = []
+        stats = BatchStats(total=len(messages), current_concurrency=max_workers)
+        
+        # Thread-safe state for adaptive concurrency
+        lock = threading.Lock()
+        current_workers = max_workers
+        backoff_until = 0.0
 
         # Sequential mode when max_workers is 0
         if max_workers == 0:
@@ -207,40 +240,117 @@ class OpenRouterClient:
                 try:
                     response = self.chat_completion(message, model)
                     results.append((i, message, response))
+                    stats.completed += 1
                 except Exception as e:
                     tqdm.write(f"  ✗ Error: {e}")
                     results.append((i, message, None))
+                    stats.failed += 1
             return results
 
-        # Parallel mode with ThreadPoolExecutor
-        def process_message(index: int, message: str) -> tuple[int, str, Optional[str]]:
-            """Process a single message and return result with index."""
-            try:
-                response = self.chat_completion(message, model)
-                return (index, message, response)
-            except Exception as e:
-                tqdm.write(f"  ✗ Error processing message {index}: {e}")
-                return (index, message, None)
+        def process_with_retry(index: int, message: str) -> tuple[int, str, Optional[str]]:
+            """Process a single message with retries and exponential backoff."""
+            nonlocal current_workers, backoff_until
+            
+            max_retries = self.config.max_retries
+            backoff = self.config.initial_backoff
+            
+            for attempt in range(max_retries + 1):
+                # Check if we need to wait for backoff
+                with lock:
+                    wait_time = backoff_until - time.time()
+                if wait_time > 0:
+                    time.sleep(wait_time)
+                
+                try:
+                    response = self.chat_completion(message, model)
+                    return (index, message, response)
+                    
+                except httpx.HTTPStatusError as e:
+                    status_code = e.response.status_code
+                    
+                    # Rate limit (429) or server overload (529)
+                    if status_code in (429, 529):
+                        with lock:
+                            stats.rate_limited += 1
+                            # Reduce concurrency on rate limit
+                            new_workers = max(4, current_workers // 2)
+                            if new_workers < current_workers:
+                                current_workers = new_workers
+                                stats.current_concurrency = current_workers
+                                tqdm.write(f"  ⚠ Rate limited, reducing concurrency to {current_workers}")
+                            
+                            # Set global backoff
+                            retry_after = float(e.response.headers.get("Retry-After", backoff))
+                            backoff_until = time.time() + retry_after
+                        
+                        if on_status:
+                            on_status(stats)
+                        
+                        if attempt < max_retries:
+                            stats.retries += 1
+                            # Exponential backoff with jitter
+                            sleep_time = backoff * (2 ** attempt) + random.uniform(0, 1)
+                            sleep_time = min(sleep_time, self.config.max_backoff)
+                            tqdm.write(f"  ⏳ Retrying {index} in {sleep_time:.1f}s (attempt {attempt + 1}/{max_retries})")
+                            time.sleep(sleep_time)
+                            continue
+                    
+                    # Other HTTP errors - don't retry
+                    tqdm.write(f"  ✗ HTTP {status_code} for message {index}: {e}")
+                    return (index, message, None)
+                    
+                except httpx.TimeoutException:
+                    if attempt < max_retries:
+                        stats.retries += 1
+                        tqdm.write(f"  ⏳ Timeout for {index}, retrying (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(backoff * (2 ** attempt))
+                        continue
+                    tqdm.write(f"  ✗ Timeout for message {index} after {max_retries} retries")
+                    return (index, message, None)
+                    
+                except Exception as e:
+                    tqdm.write(f"  ✗ Error processing message {index}: {e}")
+                    return (index, message, None)
+            
+            return (index, message, None)
 
+        # Parallel mode with ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks
             future_to_index = {
-                executor.submit(process_message, i, msg): i
+                executor.submit(process_with_retry, i, msg): i
                 for i, msg in enumerate(messages)
             }
 
-            # Collect results as they complete with progress bar
             with tqdm(
                 total=len(messages),
-                desc="Processing prompts",
+                desc=f"Processing ({max_workers} workers)",
                 unit="prompt",
                 leave=True,
             ) as pbar:
                 for future in as_completed(future_to_index):
                     result = future.result()
                     results.append(result)
+                    
+                    if result[2] is not None:
+                        stats.completed += 1
+                    else:
+                        stats.failed += 1
+                    
+                    # Update progress bar description with current concurrency
+                    with lock:
+                        if stats.current_concurrency != max_workers:
+                            pbar.set_description(f"Processing ({stats.current_concurrency} workers)")
+                    
                     pbar.update(1)
+                    
+                    if on_status:
+                        on_status(stats)
 
         # Sort results by original index to maintain order
         results.sort(key=lambda x: x[0])
+        
+        # Final status report
+        if stats.rate_limited > 0:
+            tqdm.write(f"  ℹ Rate limits hit: {stats.rate_limited}, Total retries: {stats.retries}")
+        
         return results

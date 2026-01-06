@@ -151,14 +151,41 @@ uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_t
 
 Grading results are saved to `results/<version>/grades/` with additional score columns appended to the original CSV data.
 
+This folder is now located in `packages/backend/data/results/...`. That is where all the data lives
+such that the backend can serve the data to the frontend.
+
 # Roadmap
 - [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
-    - [ ] Update the grades to include reasoning for the grade assigned.
-    - [ ] Update UI to display the reasoning for the grade assigned.
+    - [x] Update the grades to include reasoning for the grade assigned.
+    - [x] Update UI to display the reasoning for the grade assigned.
 
 ## Infra TODOs
+- [x] Cleanup architecture - consolidated all code under `packages/backend`
 - [ ] Add ruff linting and formatting to the code
-- [ ] Cleanup architecture
+- [ ] Improve code architecture, cut down on the bloat.
+- [ ] Re-design the UI to look much better and sleeker. Make it look aesthetic. There are frontend
+    claude code modules I can download that should help with this. Use shadcn/ui for the components.
+        - We don't want to just re-design the analysis UI. The major engineering here would be around
+        putting this together into a distributed web page showing the results of the benchmark.
 - [ ] Add testing framework
-- [ ] Setup CI/CD to distribute this as a package
+- [ ] Setup CI/CD to distribute this as a package so people (or just us) can run the benchmark easily.
+- [ ] Claim a domain name
+- [ ] Set up web hosting for the benchmark.
+
+## Project Structure
+
+```
+MoralBench/
+├── packages/
+│   ├── backend/              # FastAPI backend + core library
+│   │   └── src/
+│   │       ├── moralbench_api/  # REST API
+│   │       └── moral_bench/     # Core library (grading, client, etc.)
+│   └── frontend/             # React + Vite UI
+├── prompts/                  # Input prompt files (CSV/TSV)
+├── results/                  # Output results
+├── configurations/           # Model configuration files
+├── main.py                   # CLI entry point
+└── pyproject.toml           # Root project config
+```

@@ -1,4 +1,28 @@
-import type { AnnotationCreate, AnnotationLookupResponse, AnnotationsResponse, AnnotationSaveResponse, GradesSummaryResponse, HeadersResponse, ModelsResponse, PlaygroundResponse, ResultsResponse, TopicsResponse } from './types'
+import type {
+  AnnotationCreate,
+  AnnotationLookupResponse,
+  AnnotationsResponse,
+  AnnotationSaveResponse,
+  CancelResponse,
+  DryRunEstimateResponse,
+  FileValidationResponse,
+  FilesResponse,
+  GraderPromptsResponse,
+  GradersResponse,
+  GraderValidationResponse,
+  GradesSummaryResponse,
+  GradingEstimateResponse,
+  HeadersResponse,
+  JobStartResponse,
+  JobStatus,
+  ModelsResponse,
+  OpenRouterModelsResponse,
+  PlaygroundResponse,
+  PromptsFilesResponse,
+  ResultsResponse,
+  TopicsResponse,
+  VersionsResponse,
+} from './types'
 
 const API_BASE = '/api'
 
@@ -98,4 +122,176 @@ export async function deleteAnnotation(annotationId: string): Promise<void> {
     const error = await res.json()
     throw new Error(error.detail || 'Failed to delete annotation')
   }
+}
+
+export async function fetchGraderPrompts(): Promise<GraderPromptsResponse> {
+  const res = await fetch(`${API_BASE}/grader-prompts`)
+  return res.json()
+}
+
+// === Workflow API ===
+
+export async function fetchVersions(): Promise<VersionsResponse> {
+  const res = await fetch(`${API_BASE}/workflow/versions`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to fetch versions')
+  }
+  return res.json()
+}
+
+export async function fetchVersionFiles(version: string): Promise<FilesResponse> {
+  const res = await fetch(`${API_BASE}/workflow/versions/${encodeURIComponent(version)}/files`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to fetch version files')
+  }
+  return res.json()
+}
+
+export async function fetchPromptsFiles(): Promise<PromptsFilesResponse> {
+  const res = await fetch(`${API_BASE}/workflow/prompts`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to fetch prompts files')
+  }
+  return res.json()
+}
+
+export async function fetchGraders(): Promise<GradersResponse> {
+  const res = await fetch(`${API_BASE}/workflow/graders`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to fetch graders')
+  }
+  return res.json()
+}
+
+export async function validateGraders(
+  grader_ids: string[],
+  custom_prompt?: string | null
+): Promise<GraderValidationResponse> {
+  const res = await fetch(`${API_BASE}/workflow/graders/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grader_ids, custom_prompt }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to validate graders')
+  }
+  return res.json()
+}
+
+export async function validateFiles(files: string[]): Promise<FileValidationResponse> {
+  const res = await fetch(`${API_BASE}/workflow/files/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to validate files')
+  }
+  return res.json()
+}
+
+export async function estimateRun(
+  models: string[],
+  prompts_file: string
+): Promise<DryRunEstimateResponse> {
+  const res = await fetch(`${API_BASE}/workflow/run/estimate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ models, prompts_file }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to estimate run')
+  }
+  return res.json()
+}
+
+export async function estimateGrading(
+  files: string[],
+  grader_ids: string[],
+  grader_model?: string,
+  custom_prompt?: string | null
+): Promise<GradingEstimateResponse> {
+  const res = await fetch(`${API_BASE}/workflow/grade/estimate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, grader_ids, grader_model, custom_prompt }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to estimate grading')
+  }
+  return res.json()
+}
+
+export async function startRun(
+  models: string[],
+  prompts_file: string,
+  output_dir?: string
+): Promise<JobStartResponse> {
+  const res = await fetch(`${API_BASE}/workflow/run/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ models, prompts_file, output_dir }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to start run')
+  }
+  return res.json()
+}
+
+export async function startGrading(
+  files: string[],
+  grader_ids: string[],
+  grader_model?: string,
+  custom_prompt?: string | null,
+  output_dir?: string
+): Promise<JobStartResponse> {
+  const res = await fetch(`${API_BASE}/workflow/grade/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, grader_ids, grader_model, custom_prompt, output_dir }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to start grading')
+  }
+  return res.json()
+}
+
+export async function getJobStatus(job_id: string): Promise<JobStatus> {
+  const res = await fetch(`${API_BASE}/workflow/jobs/${encodeURIComponent(job_id)}`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to get job status')
+  }
+  return res.json()
+}
+
+export async function cancelJob(job_id: string): Promise<CancelResponse> {
+  const res = await fetch(`${API_BASE}/workflow/jobs/${encodeURIComponent(job_id)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to cancel job')
+  }
+  return res.json()
+}
+
+export async function fetchOpenRouterModels(refresh: boolean = false): Promise<OpenRouterModelsResponse> {
+  const params = refresh ? '?refresh=true' : ''
+  const res = await fetch(`${API_BASE}/workflow/models${params}`)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to fetch OpenRouter models')
+  }
+  return res.json()
 }

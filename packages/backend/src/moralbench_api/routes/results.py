@@ -65,8 +65,9 @@ async def run_prompt(request: PlaygroundRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Read from local data folder (copied by run.sh)
-DATA_DIR = Path(__file__).parents[3] / "data" / "results" / "v2"
+# Read from results directory set by run.sh
+RESULTS_DIR = Path(os.environ["MORALBENCH_RESULTS_DIR"])
+DATA_DIR = RESULTS_DIR / "v2"
 RESPONSES_DIR = DATA_DIR / "responses"
 GRADES_DIR = DATA_DIR / "grades"
 
