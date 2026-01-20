@@ -12,6 +12,7 @@ import {
 import { fetchModels, fetchTopics, fetchGradesSummary } from '../api'
 import type { Model, GradesSummary } from '../types'
 import { useAppStore } from '../store'
+import { CollapsibleSection } from './CollapsibleSection'
 
 const COLORS = [
   '#8884d8',
@@ -42,7 +43,7 @@ export function ModelComparison() {
   const [summaries, setSummaries] = useState<GradesSummary[]>([])
   const [topicCounts, setTopicCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
-  const [sortKey, setSortKey] = useState<'model' | 'preference1' | 'preference2' | 'justification' | 'count'>('model')
+  const [sortKey, setSortKey] = useState<'model' | 'preference1' | 'preference2' | 'justification' | 'q1' | 'q2' | 'q3' | 'q4' | 'count'>('model')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
@@ -88,6 +89,14 @@ export function ModelComparison() {
         return direction * (((a.preference2_avg ?? -Infinity) as number) - ((b.preference2_avg ?? -Infinity) as number))
       case 'justification':
         return direction * (((a.justification_avg ?? -Infinity) as number) - ((b.justification_avg ?? -Infinity) as number))
+      case 'q1':
+        return direction * (((a.q1_relativism_avg ?? -Infinity) as number) - ((b.q1_relativism_avg ?? -Infinity) as number))
+      case 'q2':
+        return direction * (((a.q2_preference_avg ?? -Infinity) as number) - ((b.q2_preference_avg ?? -Infinity) as number))
+      case 'q3':
+        return direction * (((a.q3_evidence_avg ?? -Infinity) as number) - ((b.q3_evidence_avg ?? -Infinity) as number))
+      case 'q4':
+        return direction * (((a.q4_justification_avg ?? -Infinity) as number) - ((b.q4_justification_avg ?? -Infinity) as number))
       case 'count':
         return direction * (a.count - b.count)
       case 'model':
@@ -130,6 +139,10 @@ export function ModelComparison() {
     { metric: 'Preference 1', fullMark: 100 },
     { metric: 'Preference 2', fullMark: 100 },
     { metric: 'Justification', fullMark: 100 },
+    { metric: 'Q1 Relativism', fullMark: 100 },
+    { metric: 'Q2 Preference', fullMark: 100 },
+    { metric: 'Q3 Evidence', fullMark: 100 },
+    { metric: 'Q4 Justification', fullMark: 100 },
   ]
 
   summaries.forEach((summary) => {
@@ -145,10 +158,30 @@ export function ModelComparison() {
     const justNormalized = summary.justification_avg !== null
       ? ((summary.justification_avg - 1) / 4) * 100
       : 0
+    // Q1 Relativism: 0 to 1 -> 0 to 100
+    const q1Normalized = summary.q1_relativism_avg !== null && summary.q1_relativism_avg !== undefined
+      ? summary.q1_relativism_avg * 100
+      : 0
+    // Q2 Preference: -1 to 1 -> 0 to 100
+    const q2Normalized = summary.q2_preference_avg !== null && summary.q2_preference_avg !== undefined
+      ? ((summary.q2_preference_avg + 1) / 2) * 100
+      : 0
+    // Q3 Evidence: -1 to 1 -> 0 to 100
+    const q3Normalized = summary.q3_evidence_avg !== null && summary.q3_evidence_avg !== undefined
+      ? ((summary.q3_evidence_avg + 1) / 2) * 100
+      : 0
+    // Q4 Justification Quality: 1 to 5 -> 0 to 100
+    const q4Normalized = summary.q4_justification_avg !== null && summary.q4_justification_avg !== undefined
+      ? ((summary.q4_justification_avg - 1) / 4) * 100
+      : 0
 
     chartData[0][summary.model] = Math.round(pref1Normalized * 100) / 100
     chartData[1][summary.model] = Math.round(pref2Normalized * 100) / 100
     chartData[2][summary.model] = Math.round(justNormalized * 100) / 100
+    chartData[3][summary.model] = Math.round(q1Normalized * 100) / 100
+    chartData[4][summary.model] = Math.round(q2Normalized * 100) / 100
+    chartData[5][summary.model] = Math.round(q3Normalized * 100) / 100
+    chartData[6][summary.model] = Math.round(q4Normalized * 100) / 100
   })
 
   const displayedTopicCounts = selectedTopics.length > 0
@@ -226,8 +259,7 @@ export function ModelComparison() {
 
       {/* Topic Counts */}
       {displayedTopicCounts.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Prompt Counts by Topic</h3>
+        <CollapsibleSection id="comparison-topic-counts" title="Prompt Counts by Topic">
           <div className="flex flex-wrap gap-2">
             {displayedTopicCounts.map(([topic, count]) => (
               <span
@@ -238,12 +270,11 @@ export function ModelComparison() {
               </span>
             ))}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Radar Chart */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="font-semibold text-gray-700 mb-4">Performance Comparison</h3>
+      <CollapsibleSection id="comparison-radar" title="Performance Radar Chart">
         {loading ? (
           <div className="flex items-center justify-center h-96">
             <div className="text-gray-500">Loading...</div>
@@ -285,68 +316,108 @@ export function ModelComparison() {
           <ul className="list-disc list-inside ml-2">
             <li>Preference 1 & 2: -1 to 1 mapped to 0-100%</li>
             <li>Justification: 1-5 mapped to 0-100%</li>
+            <li>Q1 Relativism: 0-1 mapped to 0-100%</li>
+            <li>Q2 Preference & Q3 Evidence: -1 to 1 mapped to 0-100%</li>
+            <li>Q4 Justification Quality: 1-5 mapped to 0-100%</li>
           </ul>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Summary Table */}
       {summaries.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4 overflow-x-auto">
-          <h3 className="font-semibold text-gray-700 mb-4">Raw Scores</h3>
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  onClick={() => handleSort('model')}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
-                >
-                  Model {sortKey === 'model' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                </th>
-                <th
-                  onClick={() => handleSort('preference1')}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
-                >
-                  Preference 1 {sortKey === 'preference1' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                </th>
-                <th
-                  onClick={() => handleSort('preference2')}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
-                >
-                  Preference 2 {sortKey === 'preference2' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                </th>
-                <th
-                  onClick={() => handleSort('justification')}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
-                >
-                  Justification {sortKey === 'justification' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                </th>
-                <th
-                  onClick={() => handleSort('count')}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
-                >
-                  Samples {sortKey === 'count' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {sortedSummaries.map((summary) => (
-                <tr key={summary.model} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm font-medium">{summary.model}</td>
-                  <td className="px-4 py-2 text-sm">
-                    {summary.preference1_avg !== null ? summary.preference1_avg.toFixed(3) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {summary.preference2_avg !== null ? summary.preference2_avg.toFixed(3) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {summary.justification_avg !== null ? summary.justification_avg.toFixed(2) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 text-sm">{summary.count}</td>
+        <CollapsibleSection id="comparison-scores-table" title="Raw Scores Summary Table">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th
+                    onClick={() => handleSort('model')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Model {sortKey === 'model' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('preference1')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Preference 1 {sortKey === 'preference1' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('preference2')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Preference 2 {sortKey === 'preference2' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('justification')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Justification {sortKey === 'justification' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('q1')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Q1 Relativism {sortKey === 'q1' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('q2')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Q2 Preference {sortKey === 'q2' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('q3')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Q3 Evidence {sortKey === 'q3' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('q4')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Q4 Justification {sortKey === 'q4' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('count')}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none"
+                  >
+                    Samples {sortKey === 'count' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sortedSummaries.map((summary) => (
+                  <tr key={summary.model} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm font-medium">{summary.model}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.preference1_avg !== null ? summary.preference1_avg.toFixed(3) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.preference2_avg !== null ? summary.preference2_avg.toFixed(3) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.justification_avg !== null ? summary.justification_avg.toFixed(2) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.q1_relativism_avg !== null && summary.q1_relativism_avg !== undefined ? summary.q1_relativism_avg.toFixed(3) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.q2_preference_avg !== null && summary.q2_preference_avg !== undefined ? summary.q2_preference_avg.toFixed(3) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.q3_evidence_avg !== null && summary.q3_evidence_avg !== undefined ? summary.q3_evidence_avg.toFixed(3) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {summary.q4_justification_avg !== null && summary.q4_justification_avg !== undefined ? summary.q4_justification_avg.toFixed(2) : 'N/A'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">{summary.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
       )}
     </div>
   )

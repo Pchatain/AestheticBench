@@ -29,6 +29,10 @@ export interface GradesSummary {
   preference1_avg: number | null
   preference2_avg: number | null
   justification_avg: number | null
+  q1_relativism_avg?: number | null
+  q2_preference_avg?: number | null
+  q3_evidence_avg?: number | null
+  q4_justification_avg?: number | null
   count: number
 }
 
