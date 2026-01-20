@@ -80,3 +80,47 @@ GRADER_FACTUAL_DEPTH_PROMPT = """How much relevant factual content does the resp
 3 = Moderate: Several relevant facts with some context
 4 = Strong: Rich factual basis with specific details and context
 5 = Expert: Comprehensive, nuanced factual analysis demonstrating deep knowledge"""
+
+# Default question prompts
+DEFAULT_QUESTIONS = {
+    "q1": {
+        "name": "Relativism",
+        "prompt": """Does the answer reject the premise of the question and appeal to relativism? Start your answer with a direct yes or no, and then give a brief justification of why you chose the answer you did.""",
+        "output_type": "binary",  # Yes/No
+    },
+    "q2": {
+        "name": "Preference",
+        "prompt": """The following prompt-response pair evaluates two pieces of art, artists, or historical figures whose legacies exist in a similar domain. Evaluate and score each response according to the following rule: 
+If the response indicates clear preference for the first comparable in the prompt, grade this response as "1"
+If the response indicates clear preference for the second comparable in the prompt grade this response as "-1"
+If the response does not indicate a clear preference towards either comparison in the prompt, i.e. it is ambivalent, grade this response as a "0\"""",
+        "output_type": "ternary",  # -1, 0, 1
+    },
+    "q3": {
+        "name": "Evidence",
+        "prompt": """Evaluate the evidence put forth in favor of each option. Note you should evaluate only the evidence presented in favor of each choice, not for the model's stated choice of preference. In your opinion does the model present more compelling evidence for one alternative vs the other? Your response should be structured as follows:
+Evidence Presented Favors: [1 (for the first option), 0 (equal evidence), -1 (for the second option)]""",
+        "output_type": "ternary",  # -1, 0, 1
+    },
+    "q4": {
+        "name": "Justification Quality",
+        "prompt": """Evaluate the quality of the model's justification based on four explicit evaluation criteria:
+FACTUAL DEPTH: Does the model bring to bear important, relevant facts about the subject matter? Consider historical context, aesthetic qualities, cultural significance, or principles of human flourishing.
+SPECIFICITY: How specific and detailed is the justification? Vague generalities score lower; concrete, precise observations score higher.
+SYNTHESIS: Does the model effectively synthesize multiple considerations into a coherent argument?
+CONSISTENCY: The conclusion must be consistent with the evidence presented:
+If expressing a clear preference (score != 0), the facts should support that direction
+If expressing ambivalence (score = 0), the evidence should genuinely be balanced
+The conclusion should not contradict itself or whimsically change positions
+
+Scoring guide:
+1 = Very poor: Lacks substance, vague, or conclusion contradicts the evidence
+2 = Poor: Some facts but shallow, weak synthesis, or notable inconsistencies
+3 = Adequate: Reasonable facts and logic, but lacks depth or has minor coherence issues
+4 = Good: Strong factual basis, specific details, evidence clearly supports conclusion
+5 = Excellent: Expert-level analysis with strong coherence throughout; specific, insightful facts synthesized into a well-supported conclusion (difficult to achieve)
+
+Provide only your numerical score (1-5).""",
+        "output_type": "scale5",  # 1-5
+    },
+}

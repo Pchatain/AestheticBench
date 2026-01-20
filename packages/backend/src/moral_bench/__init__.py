@@ -3,6 +3,7 @@
 from .client import OpenRouterClient
 from .config import Config
 from .grading import GradingProcessor, Grader, GraderRegistry
+from .grader_prompts import DEFAULT_QUESTIONS
 from .processor import CSVReader, PromptProcessor, ResultWriter
 
 __version__ = "0.1.0"
@@ -16,4 +17,5 @@ __all__ = [
     "GradingProcessor",
     "Grader",
     "GraderRegistry",
+    "DEFAULT_QUESTIONS",
 ]
