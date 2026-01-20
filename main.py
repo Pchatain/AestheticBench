@@ -198,19 +198,31 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
     print("  2. preference2   - Continuous [-1, 1] preference scoring")
     print("  3. justification - Quality of justification (1-5 scale) [requires preference1]")
     print("  4. custom        - Write your own grader prompt")
+    print("  5. q1            - Relativism check (0=no, 1=yes)")
+    print("  6. q2            - Preference (-1, 0, 1)")
+    print("  7. q3            - Evidence evaluation (-1, 0, 1)")
+    print("  8. q4            - Justification quality (1-5)")
     print("\nYou can select multiple graders (comma-separated).")
-    print("Examples: '1,3' or 'preference1,justification' or 'all'\n")
+    print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1,q2,q3,q4'\n")
 
     grader_map = {
         "1": "preference1",
         "2": "preference2",
         "3": "justification",
         "4": "custom",
+        "5": "q1",
+        "6": "q2",
+        "7": "q3",
+        "8": "q4",
         "preference1": "preference1",
         "preference2": "preference2",
         "justification": "justification",
         "custom": "custom",
-        "all": ["preference1", "preference2", "justification"],
+        "q1": "q1",
+        "q2": "q2",
+        "q3": "q3",
+        "q4": "q4",
+        "all": ["preference1", "preference2", "justification", "q1", "q2", "q3", "q4"],
     }
 
     selection = typer.prompt("Select graders")
