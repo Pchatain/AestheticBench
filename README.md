@@ -168,6 +168,7 @@ such that the backend can serve the data to the frontend.
     claude code modules I can download that should help with this. Use shadcn/ui for the components.
         - We don't want to just re-design the analysis UI. The major engineering here would be around
         putting this together into a distributed web page showing the results of the benchmark.
+- [ ] Add retry logic on failed or errored responses to ensure we get responses.
 - [ ] Add testing framework
 - [ ] Setup CI/CD to distribute this as a package so people (or just us) can run the benchmark easily.
 - [ ] Claim a domain name
