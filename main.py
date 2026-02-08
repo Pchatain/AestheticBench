@@ -8,6 +8,7 @@ from tqdm import tqdm
 from typing_extensions import Annotated
 
 from moral_bench import Config, OpenRouterClient, PromptProcessor
+from moral_bench.errors import setup_error_logging
 from moral_bench.grading import GradingProcessor
 from moralbench_api.services.config_service import ConfigService
 from moralbench_api.services.discovery import DiscoveryService
@@ -534,5 +535,185 @@ def grade(
             raise typer.Exit(code=1)
 
 
+@app.command("export-grades")
+def export_grades(
+    files: Annotated[
+        list[str],
+        typer.Argument(help="Graded CSV files to export"),
+    ],
+    output: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Output CSV file path"),
+    ] = "grades_summary.csv",
+):
+    """Export Q1-Q4 grade scores from graded result files to a summary CSV."""
+    import csv
+    import re
+
+    print("========================================")
+    print("  MoralBench - Export Grades Summary")
+    print("========================================\n")
+
+    rows = []
+    for filepath in files:
+        path = Path(filepath)
+        if not path.exists():
+            print(f"Warning: File not found: {filepath}")
+            continue
+
+        # Extract model name from filename (e.g., "anthropic_claude-opus-4.5" from path)
+        filename = path.stem
+        match = re.match(r"^([^_]+_[^_]+)", filename)
+        model_name = match.group(1) if match else filename.split("_")[0]
+
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+
+            # Find Q1-Q4 score columns
+            score_cols = {}
+            for h in headers:
+                for q in ["Q1", "Q2", "Q3", "Q4"]:
+                    if h.startswith(f"{q}_") and h.endswith("_Score"):
+                        score_cols[q] = h
+                        break
+
+            if len(score_cols) < 4:
+                print(f"Warning: {filepath} missing some Q1-Q4 score columns, found: {list(score_cols.keys())}")
+
+            def clean_score(val):
+                """Return score or n/a if it's an error/non-numeric."""
+                if not val or val.startswith("PARSE_ERROR") or val.startswith("ERROR"):
+                    return "n/a"
+                return val
+
+            for row in reader:
+                rows.append({
+                    "Model": model_name,
+                    "Topic": row.get("Topic", ""),
+                    "Question": row.get("Question", ""),
+                    "Q1_Score": clean_score(row.get(score_cols.get("Q1", ""), "")),
+                    "Q2_Score": clean_score(row.get(score_cols.get("Q2", ""), "")),
+                    "Q3_Score": clean_score(row.get(score_cols.get("Q3", ""), "")),
+                    "Q4_Score": clean_score(row.get(score_cols.get("Q4", ""), "")),
+                })
+
+        print(f"  Loaded {filepath}: {model_name}")
+
+    if not rows:
+        print("Error: No data to export")
+        raise typer.Exit(code=1)
+
+    # Write output CSV
+    output_path = Path(output)
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["Model", "Topic", "Question", "Q1_Score", "Q2_Score", "Q3_Score", "Q4_Score"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"\n✓ Exported {len(rows)} rows to {output_path}")
+
+
+@app.command("export-stats")
+def export_stats(
+    files: Annotated[
+        list[str],
+        typer.Argument(help="Graded CSV files to export"),
+    ],
+    output: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Output CSV file path"),
+    ] = "grades_stats.csv",
+):
+    """Export Q1-Q4 grade statistics (counts per rating) from graded result files."""
+    import csv
+    import re
+    from collections import Counter
+
+    print("========================================")
+    print("  MoralBench - Export Grade Statistics")
+    print("========================================\n")
+
+    model_stats = {}
+
+    for filepath in files:
+        path = Path(filepath)
+        if not path.exists():
+            print(f"Warning: File not found: {filepath}")
+            continue
+
+        filename = path.stem
+        match = re.match(r"^([^_]+_[^_]+)", filename)
+        model_name = match.group(1) if match else filename.split("_")[0]
+
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+
+            score_cols = {}
+            for h in headers:
+                for q in ["Q1", "Q2", "Q3", "Q4"]:
+                    if h.startswith(f"{q}_") and h.endswith("_Score"):
+                        score_cols[q] = h
+                        break
+
+            counters = {q: Counter() for q in ["Q1", "Q2", "Q3", "Q4"]}
+
+            for row in reader:
+                for q in ["Q1", "Q2", "Q3", "Q4"]:
+                    val = row.get(score_cols.get(q, ""), "")
+                    if val and not val.startswith("PARSE_ERROR") and not val.startswith("ERROR"):
+                        counters[q][val] += 1
+                    else:
+                        counters[q]["n/a"] += 1
+
+            model_stats[model_name] = counters
+            print(f"  Loaded {filepath}: {model_name}")
+
+    if not model_stats:
+        print("Error: No data to export")
+        raise typer.Exit(code=1)
+
+    # Build stats rows
+    rows = []
+    for model_name, counters in model_stats.items():
+        row = {"Model": model_name}
+        for q in ["Q1", "Q2", "Q3", "Q4"]:
+            for val, count in sorted(counters[q].items(), key=lambda x: (x[0] == "n/a", x[0])):
+                row[f"{q}_{val}"] = count
+        rows.append(row)
+
+    # Collect all columns
+    all_cols = {"Model"}
+    for row in rows:
+        all_cols.update(row.keys())
+    
+    # Sort columns: Model first, then Q1_*, Q2_*, Q3_*, Q4_*
+    def col_sort_key(c):
+        if c == "Model":
+            return (0, "")
+        parts = c.split("_", 1)
+        q_order = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(parts[0], 5)
+        val = parts[1] if len(parts) > 1 else ""
+        if val == "n/a":
+            return (q_order, 999)
+        try:
+            return (q_order, int(val))
+        except ValueError:
+            return (q_order, 998)
+    
+    fieldnames = sorted(all_cols, key=col_sort_key)
+
+    output_path = Path(output)
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, 0) for k in fieldnames})
+
+    print(f"\n✓ Exported stats for {len(model_stats)} models to {output_path}")
+
+
 if __name__ == "__main__":
+    setup_error_logging()
     app()

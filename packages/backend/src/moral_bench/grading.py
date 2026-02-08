@@ -11,6 +11,7 @@ from typing import Any, Optional
 from tqdm import tqdm
 
 from .client import OpenRouterClient
+from .errors import log_parse_error
 from .grader_prompts import (
     DEFAULT_QUESTIONS,
     GRADER_FACTUAL_DEPTH_PROMPT,
@@ -968,8 +969,9 @@ class GradingProcessor:
         # Parse and validate results using grader's grade() method
         success_count = 0
         error_count = 0
+        max_parse_retries = 5
 
-        for idx, _, grader_response in tqdm(
+        for idx, prompt, grader_response in tqdm(
             batch_results,
             desc=f"  Grading with {grader.name}",
             unit="response",
@@ -987,6 +989,27 @@ class GradingProcessor:
                 grader_response,
             )
 
+            # Retry on parse errors (not validation errors or API failures)
+            retry_count = 0
+            while not success and "PARSE_ERROR" in error_msg and retry_count < max_parse_retries:
+                retry_count += 1
+                log_parse_error(
+                    grader.name,
+                    f"[Retry {retry_count}/{max_parse_retries}] {grader_response}",
+                    responses[idx]["Question"]
+                )
+                tqdm.write(f"    ⏳ Parse error for {idx}, retrying ({retry_count}/{max_parse_retries})")
+                
+                # Re-call the API for this single prompt
+                retry_response = self.client.chat_completion(prompt, grader_model)
+                if retry_response:
+                    grader_response = retry_response
+                    success, score, reasoning, error_msg = grader.grade(
+                        responses[idx]["Question"],
+                        responses[idx]["Model Response"],
+                        grader_response,
+                    )
+
             if success:
                 responses[idx][grader.column_name] = str(score)
                 responses[idx][grader.reasoning_column_name] = reasoning
@@ -995,6 +1018,7 @@ class GradingProcessor:
                 responses[idx][grader.column_name] = error_msg
                 responses[idx][grader.reasoning_column_name] = ""
                 error_count += 1
+                log_parse_error(grader.name, grader_response, responses[idx]["Question"])
 
         print(f"  ✓ Success: {success_count}, ✗ Errors: {error_count}")
 
