@@ -5,7 +5,9 @@ description = "Package to measure the morality of LLMs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "kaleido>=1.2.0",
     "moralbench-api",
+    "plotly>=6.5.2",
 ]
 
 [tool.uv.workspace]
