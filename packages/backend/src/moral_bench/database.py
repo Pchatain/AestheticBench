@@ -416,6 +416,14 @@ class MoralBenchDB:
         preference_score: Optional[float] = None,
         justification_reasoning: Optional[str] = None,
         justification_score: Optional[int] = None,
+        q1_score: Optional[str] = None,
+        q1_reasoning: Optional[str] = None,
+        q2_score: Optional[int] = None,
+        q2_reasoning: Optional[str] = None,
+        q3_score: Optional[int] = None,
+        q3_reasoning: Optional[str] = None,
+        q4_score: Optional[int] = None,
+        q4_reasoning: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
     ) -> str:
@@ -425,8 +433,11 @@ class MoralBenchDB:
             conn.execute(
                 """INSERT OR REPLACE INTO annotations 
                    (id, response_id, model, notes, preference_reasoning, preference_score,
-                    justification_reasoning, justification_score, created_at, updated_at) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    justification_reasoning, justification_score, 
+                    q1_score, q1_reasoning, q2_score, q2_reasoning,
+                    q3_score, q3_reasoning, q4_score, q4_reasoning,
+                    created_at, updated_at) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     annotation_id,
                     response_id,
@@ -436,6 +447,14 @@ class MoralBenchDB:
                     preference_score,
                     justification_reasoning,
                     justification_score,
+                    q1_score,
+                    q1_reasoning,
+                    q2_score,
+                    q2_reasoning,
+                    q3_score,
+                    q3_reasoning,
+                    q4_score,
+                    q4_reasoning,
                     created_at or now,
                     updated_at or now,
                 ),
