@@ -1,6 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fetchQ1Q4Responses, fetchQ1Q4Models, saveQ1Q4Annotation } from '../api'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { ResponseWithQ1Q4, Q1Q4AnnotationCreate } from '../types'
+
+// Models that have Q1-Q4 grades in the database
+const MODELS_WITH_Q1Q4_GRADES = [
+  'anthropic/claude-opus-4.5',
+  'deepseek/deepseek-v3.2',
+  'openai/gpt-5.2',
+  'x-ai/grok-4-fast',
+]
 
 interface AnnotationFormData {
   q1_score: string | null
@@ -309,7 +318,10 @@ function AnnotationModal({ isOpen, response, onSave, onClose }: AnnotationModalP
 
 export function Q1Q4Annotator() {
   const [models, setModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState('')
+  const [selectedModel, setSelectedModel] = useLocalStorage<string>(
+    'moralbench-q1q4-selected-model',
+    MODELS_WITH_Q1Q4_GRADES[0] // Default to first model with grades
+  )
   const [responses, setResponses] = useState<ResponseWithQ1Q4[]>([])
   const [loading, setLoading] = useState(false)
   const [limit] = useState(100)
