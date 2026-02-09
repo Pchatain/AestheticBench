@@ -154,11 +154,15 @@ Grading results are saved to `results/<version>/grades/` with additional score c
 This folder is now located in `packages/backend/data/results/...`. That is where all the data lives
 such that the backend can serve the data to the frontend.
 
-# Roadmap
+# Research Roadmap
 - [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
     - [x] Update the grades to include reasoning for the grade assigned.
     - [x] Update UI to display the reasoning for the grade assigned.
+- [ ] Update prompts to be formatted with A,B placeholders so we can swap order of comparisons.
+- [ ] Create a handful more questions
+- [ ] Label question responses for select 5 models, get LLM judge agreement.
+- [ ] Run at scale and get statistical significance estimates for the questions across selected models.
 
 ## Infra TODOs
 - [x] Cleanup architecture - consolidated all code under `packages/backend`
@@ -168,8 +172,8 @@ such that the backend can serve the data to the frontend.
     claude code modules I can download that should help with this. Use shadcn/ui for the components.
         - We don't want to just re-design the analysis UI. The major engineering here would be around
         putting this together into a distributed web page showing the results of the benchmark.
-- [ ] Add retry logic on failed or errored responses to ensure we get responses.
-- [ ] Add testing framework
+- [x] Add retry logic on failed or errored responses to ensure we get responses.
+- [x] Add testing framework
 - [ ] Setup CI/CD to distribute this as a package so people (or just us) can run the benchmark easily.
 - [ ] Claim a domain name
 - [ ] Set up web hosting for the benchmark.
