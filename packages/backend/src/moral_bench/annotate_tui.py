@@ -216,7 +216,7 @@ class AnnotateTUI(App):
         padding: 1 0;
     }
     #response-idx-input {
-        width: 8;
+        width: 12;
     }
     #response-total-label {
         padding: 1 1;
