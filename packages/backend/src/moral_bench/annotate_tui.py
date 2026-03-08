@@ -210,6 +210,19 @@ class AnnotateTUI(App):
     }
     #response-header {
         height: auto;
+        padding: 0 0 0 0;
+    }
+    #response-prefix {
+        padding: 1 0;
+    }
+    #response-idx-input {
+        width: 8;
+    }
+    #response-total-label {
+        padding: 1 1;
+    }
+    #progress-dots {
+        height: auto;
         padding: 0 0 1 0;
     }
     #response-panel {
@@ -304,7 +317,11 @@ class AnnotateTUI(App):
         with Container(id="annotation-view", classes="hidden"):
             with Horizontal(id="main-content"):
                 with Vertical(id="left-panel"):
-                    yield Label("", id="response-header")
+                    with Horizontal(id="response-header"):
+                        yield Label("Response ", id="response-prefix")
+                        yield Input("", id="response-idx-input", restrict=r"\d*")
+                        yield Label("", id="response-total-label")
+                    yield Static("", id="progress-dots")
                     with VerticalScroll(id="response-scroll"):
                         yield Static("", id="response-panel")
                     with Horizontal(id="question-nav"):
@@ -398,8 +415,11 @@ class AnnotateTUI(App):
         idx = self.current_response_idx + 1
 
         filter_status = "[unannotated]" if self.show_unannotated_only else "[all]"
-        header = f"Response {idx}/{total} for {self.selected_model} {filter_status}"
-        self.query_one("#response-header", Label).update(header)
+        self.query_one("#response-idx-input", Input).value = str(idx)
+        self.query_one("#response-total-label", Label).update(
+            f"/ {total}  {self.selected_model}  {filter_status}"
+        )
+        self._update_progress_dots()
 
         topic = r.get("topic", "")
         question = r.get("question_text", "")
@@ -560,6 +580,7 @@ class AnnotateTUI(App):
         for q in QUESTION_ORDER:
             r[f"human_{q}_score"] = self.human_scores.get(q)
             r[f"human_{q}_reasoning"] = self.human_reasoning.get(q)
+        self._update_progress_dots()
 
     def _show_summary(self) -> None:
         """Show summary modal after the last question."""
@@ -577,6 +598,44 @@ class AnnotateTUI(App):
                 self._update_nav_buttons()
 
         self.push_screen(SummaryModal(self.human_scores, llm_scores), on_summary_close)
+
+    def _annotation_status(self, r: dict) -> str:
+        scores = [r.get(f"human_{q}_score") for q in QUESTION_ORDER]
+        filled = sum(1 for s in scores if s is not None)
+        if filled == 0:
+            return "empty"
+        elif filled == len(QUESTION_ORDER):
+            return "full"
+        return "partial"
+
+    def _update_progress_dots(self) -> None:
+        n = len(self.responses)
+        cur = self.current_response_idx
+        parts = []
+        for i, r in enumerate(self.responses):
+            status = self._annotation_status(r)
+            dot = "●" if status == "full" else ("◐" if status == "partial" else "○")
+            color = "green" if status == "full" else ("yellow" if status == "partial" else "dim")
+            if i == cur:
+                parts.append(f"[bold white on blue]{dot}[/bold white on blue] ")
+            else:
+                parts.append(f"[{color}]{dot}[/{color}] ")
+
+        self.query_one("#progress-dots", Static).update("".join(parts))
+
+    @on(Input.Submitted, "#response-idx-input")
+    def jump_to_response(self, event: Input.Submitted) -> None:
+        try:
+            n = int(event.value) - 1  # 1-indexed
+            if 0 <= n < len(self.responses):
+                self.current_response_idx = n
+                self.current_question = "q1"
+                self._display_current()
+                self.query_one("#score-input", Input).focus()
+            else:
+                self.notify(f"Out of range (1–{len(self.responses)})", severity="error")
+        except ValueError:
+            pass
 
     def action_next_response(self) -> None:
         if self.current_response_idx < len(self.responses) - 1:
