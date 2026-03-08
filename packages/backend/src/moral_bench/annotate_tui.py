@@ -535,7 +535,7 @@ class AnnotateTUI(App):
         self.notify(f"{QUESTION_LABELS[q_key]} saved", severity="information")
 
     def _persist_annotation(self) -> None:
-        """Persist all current scores to the database."""
+        """Write-through: persist annotation to DB and update in-memory cache."""
         r = self.responses[self.current_response_idx]
         response_id = r["response_id"]
 
