@@ -45,6 +45,7 @@ class Annotation(BaseModel):
     id: Optional[str] = None
     response_id: int
     model: str
+    annotator: Optional[str] = None
     notes: Optional[str] = None
     preference_reasoning: Optional[str] = None
     preference_score: Optional[float] = None
@@ -112,6 +113,7 @@ class MoralBenchDB:
         id TEXT PRIMARY KEY,
         response_id INTEGER REFERENCES responses(id),
         model TEXT NOT NULL,
+        annotator TEXT,
         notes TEXT,
         preference_reasoning TEXT,
         preference_score REAL,
@@ -155,6 +157,7 @@ class MoralBenchDB:
     def _migrate_db(self):
         """Apply incremental migrations (add columns if missing)."""
         new_columns = [
+            "ALTER TABLE annotations ADD COLUMN annotator TEXT",
             "ALTER TABLE annotations ADD COLUMN q4_1_score INTEGER",
             "ALTER TABLE annotations ADD COLUMN q4_1_reasoning TEXT",
             "ALTER TABLE annotations ADD COLUMN q4_2_score INTEGER",
@@ -447,6 +450,7 @@ class MoralBenchDB:
         annotation_id: str,
         response_id: int,
         model: str,
+        annotator: Optional[str] = None,
         notes: Optional[str] = None,
         preference_reasoning: Optional[str] = None,
         preference_score: Optional[float] = None,
@@ -476,7 +480,7 @@ class MoralBenchDB:
         with self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO annotations
-                   (id, response_id, model, notes, preference_reasoning, preference_score,
+                   (id, response_id, model, annotator, notes, preference_reasoning, preference_score,
                     justification_reasoning, justification_score,
                     q1_score, q1_reasoning, q2_score, q2_reasoning,
                     q3_score, q3_reasoning,
@@ -484,11 +488,12 @@ class MoralBenchDB:
                     q4_1_score, q4_1_reasoning, q4_2_score, q4_2_reasoning,
                     q4_3_score, q4_3_reasoning, q4_4_score, q4_4_reasoning,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     annotation_id,
                     response_id,
                     model,
+                    annotator,
                     notes,
                     preference_reasoning,
                     preference_score,

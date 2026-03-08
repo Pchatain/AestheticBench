@@ -1,5 +1,6 @@
 """Q1-Q4 Annotation TUI for human grading of model responses."""
 
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -281,6 +282,9 @@ class AnnotateTUI(App):
     def __init__(self) -> None:
         super().__init__()
         self.db = MoralBenchDB(DB_PATH)
+        self.annotator: str = subprocess.run(
+            ["whoami"], capture_output=True, text=True
+        ).stdout.strip()
         self.models: list[str] = []
         self.selected_model: Optional[str] = None
         self.responses: list[dict] = []
@@ -530,6 +534,7 @@ class AnnotateTUI(App):
             annotation_id=annotation_id,
             response_id=response_id,
             model=self.selected_model,
+            annotator=self.annotator,
             q1_score=self.human_scores.get("q1"),
             q1_reasoning=self.human_reasoning.get("q1"),
             q2_score=_int_or_none("q2"),
