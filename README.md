@@ -133,10 +133,10 @@ Each model response is evaluated on four dimensions:
 - **Q2 — Preference** (-1, 0, 1): Does the response express a clear preference? 1 = favors the first option, -1 = favors the second, 0 = ambivalent.
 - **Q3 — Evidence** (-1, 0, 1): Which side does the evidence presented in the response favor? Note: this treats evidence as an unstated condition — we are not asking the model to explicitly present evidence, but rather inferring which side the evidence in its reply supports.
 - **Q4 — Justification Quality** (1–5): Overall quality of the response's justification on a 1-5 scale.
-- **Q4.1 — Factual Depth & Specificity** (0/1): Does the response bring concrete, relevant facts — specific details, dates, names, context — rather than vague generalities?
-- **Q4.2 — Synthesis** (0/1): Does the response assemble its facts into a coherent argument, rather than listing disconnected points?
-- **Q4.3 — Consistency** (0/1): Does the conclusion follow from the evidence? The response should not contradict itself or maintain a position that its own evidence undermines.
-- **Q4.4 — (reserved)**
+- **Q4.1 — Factual Depth** (0/1): Does the response bring important, relevant facts to bear — historical context, aesthetic qualities, cultural significance?
+- **Q4.2 — Specificity** (0/1): Are the claims concrete and precise, with specific details rather than vague generalities?
+- **Q4.3 — Synthesis** (0/1): Does the response assemble its facts into a coherent argument, rather than listing disconnected points?
+- **Q4.4 — Consistency** (0/1): Does the conclusion follow from the evidence? The response should not contradict itself or maintain a position that its own evidence undermines.
 
 ### Available Graders
 
