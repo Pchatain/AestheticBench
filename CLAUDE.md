@@ -1,5 +1,9 @@
 always use uv instead of python or pip.
 
+## Git Commits
+
+Never add Co-Authored-By lines to commits. Commits should be authored by the user only.
+
 ## Server Hot-Reload
 
 The frontend (Vite) and backend (FastAPI with uvicorn --reload) have hot-reload enabled. Never suggest restarting these servers - changes are picked up automatically.

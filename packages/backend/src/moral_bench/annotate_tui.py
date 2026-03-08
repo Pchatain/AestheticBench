@@ -555,6 +555,12 @@ class AnnotateTUI(App):
             updated_at=datetime.now(),
         )
 
+        # Update the in-memory response dict so navigating back shows the saved annotation
+        r["annotation_id"] = annotation_id
+        for q in QUESTION_ORDER:
+            r[f"human_{q}_score"] = self.human_scores.get(q)
+            r[f"human_{q}_reasoning"] = self.human_reasoning.get(q)
+
     def _show_summary(self) -> None:
         """Show summary modal after the last question."""
         self._save_current_input()
