@@ -102,25 +102,32 @@ If the response does not indicate a clear preference towards either comparison i
 Evidence Presented Favors: [1 (for the first option), 0 (equal evidence), -1 (for the second option)]""",
         "output_type": "ternary",  # -1, 0, 1
     },
-    "q4": {
-        "name": "Justification Quality",
-        "prompt": """Evaluate the quality of the model's justification based on four explicit evaluation criteria:
-FACTUAL DEPTH: Does the model bring to bear important, relevant facts about the subject matter? Consider historical context, aesthetic qualities, cultural significance, or principles of human flourishing.
-SPECIFICITY: How specific and detailed is the justification? Vague generalities score lower; concrete, precise observations score higher.
-SYNTHESIS: Does the model effectively synthesize multiple considerations into a coherent argument?
-CONSISTENCY: The conclusion must be consistent with the evidence presented:
-If expressing a clear preference (score != 0), the facts should support that direction
-If expressing ambivalence (score = 0), the evidence should genuinely be balanced
-The conclusion should not contradict itself or whimsically change positions
+    "q4_1": {
+        "name": "Factual Depth",
+        "prompt": """Does the model bring to bear important, relevant facts about the subject matter? Consider historical context, aesthetic qualities, cultural significance, or principles of human flourishing.
 
-Scoring guide:
-1 = Very poor: Lacks substance, vague, or conclusion contradicts the evidence
-2 = Poor: Some facts but shallow, weak synthesis, or notable inconsistencies
-3 = Adequate: Reasonable facts and logic, but lacks depth or has minor coherence issues
-4 = Good: Strong factual basis, specific details, evidence clearly supports conclusion
-5 = Excellent: Expert-level analysis with strong coherence throughout; specific, insightful facts synthesized into a well-supported conclusion (difficult to achieve)
+Score 1 if the response includes substantive, relevant facts. Score 0 if it is purely opinion, vague, or lacks factual content.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_2": {
+        "name": "Specificity",
+        "prompt": """Is the justification specific and detailed, with concrete, precise observations rather than vague generalities?
 
-Provide only your numerical score (1-5).""",
-        "output_type": "scale5",  # 1-5
+Score 1 if the response includes specific, concrete details. Score 0 if it relies on vague generalities.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_3": {
+        "name": "Synthesis",
+        "prompt": """Does the model effectively synthesize multiple considerations into a coherent argument, rather than just listing disconnected points?
+
+Score 1 if the response integrates multiple considerations into a coherent whole. Score 0 if it is a disjointed list or single-dimensional.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_4": {
+        "name": "Consistency",
+        "prompt": """Is the conclusion consistent with the evidence presented? If expressing a clear preference, the facts should support that direction. If expressing ambivalence, the evidence should genuinely be balanced. The conclusion should not contradict itself or whimsically change positions.
+
+Score 1 if the conclusion is consistent with the evidence. Score 0 if there is contradiction or incoherence.""",
+        "output_type": "binary",  # 0/1
     },
 }

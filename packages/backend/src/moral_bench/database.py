@@ -57,8 +57,16 @@ class Annotation(BaseModel):
     q2_reasoning: Optional[str] = None
     q3_score: Optional[int] = None  # -1, 0, 1
     q3_reasoning: Optional[str] = None
-    q4_score: Optional[int] = None  # 1-5
+    q4_score: Optional[int] = None  # 1-5 (legacy aggregate)
     q4_reasoning: Optional[str] = None
+    q4_1_score: Optional[int] = None  # 0/1
+    q4_1_reasoning: Optional[str] = None
+    q4_2_score: Optional[int] = None  # 0/1
+    q4_2_reasoning: Optional[str] = None
+    q4_3_score: Optional[int] = None  # 0/1
+    q4_3_reasoning: Optional[str] = None
+    q4_4_score: Optional[int] = None  # 0/1
+    q4_4_reasoning: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -117,6 +125,14 @@ class MoralBenchDB:
         q3_reasoning TEXT,
         q4_score INTEGER,
         q4_reasoning TEXT,
+        q4_1_score INTEGER,
+        q4_1_reasoning TEXT,
+        q4_2_score INTEGER,
+        q4_2_reasoning TEXT,
+        q4_3_score INTEGER,
+        q4_3_reasoning TEXT,
+        q4_4_score INTEGER,
+        q4_4_reasoning TEXT,
         created_at TIMESTAMP,
         updated_at TIMESTAMP,
         UNIQUE(response_id, model)
@@ -134,6 +150,26 @@ class MoralBenchDB:
         """Initialize database schema."""
         with self._connect() as conn:
             conn.executescript(self.SCHEMA)
+        self._migrate_db()
+
+    def _migrate_db(self):
+        """Apply incremental migrations (add columns if missing)."""
+        new_columns = [
+            "ALTER TABLE annotations ADD COLUMN q4_1_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q4_1_reasoning TEXT",
+            "ALTER TABLE annotations ADD COLUMN q4_2_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q4_2_reasoning TEXT",
+            "ALTER TABLE annotations ADD COLUMN q4_3_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q4_3_reasoning TEXT",
+            "ALTER TABLE annotations ADD COLUMN q4_4_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q4_4_reasoning TEXT",
+        ]
+        with self._connect() as conn:
+            for sql in new_columns:
+                try:
+                    conn.execute(sql)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
 
     @contextmanager
     def _connect(self):
@@ -424,6 +460,14 @@ class MoralBenchDB:
         q3_reasoning: Optional[str] = None,
         q4_score: Optional[int] = None,
         q4_reasoning: Optional[str] = None,
+        q4_1_score: Optional[int] = None,
+        q4_1_reasoning: Optional[str] = None,
+        q4_2_score: Optional[int] = None,
+        q4_2_reasoning: Optional[str] = None,
+        q4_3_score: Optional[int] = None,
+        q4_3_reasoning: Optional[str] = None,
+        q4_4_score: Optional[int] = None,
+        q4_4_reasoning: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
     ) -> str:
@@ -431,13 +475,16 @@ class MoralBenchDB:
         now = datetime.now()
         with self._connect() as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO annotations 
+                """INSERT OR REPLACE INTO annotations
                    (id, response_id, model, notes, preference_reasoning, preference_score,
-                    justification_reasoning, justification_score, 
+                    justification_reasoning, justification_score,
                     q1_score, q1_reasoning, q2_score, q2_reasoning,
-                    q3_score, q3_reasoning, q4_score, q4_reasoning,
-                    created_at, updated_at) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    q3_score, q3_reasoning,
+                    q4_score, q4_reasoning,
+                    q4_1_score, q4_1_reasoning, q4_2_score, q4_2_reasoning,
+                    q4_3_score, q4_3_reasoning, q4_4_score, q4_4_reasoning,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     annotation_id,
                     response_id,
@@ -455,6 +502,14 @@ class MoralBenchDB:
                     q3_reasoning,
                     q4_score,
                     q4_reasoning,
+                    q4_1_score,
+                    q4_1_reasoning,
+                    q4_2_score,
+                    q4_2_reasoning,
+                    q4_3_score,
+                    q4_3_reasoning,
+                    q4_4_score,
+                    q4_4_reasoning,
                     created_at or now,
                     updated_at or now,
                 ),
@@ -558,7 +613,15 @@ class MoralBenchDB:
                        a.q3_score as human_q3_score,
                        a.q3_reasoning as human_q3_reasoning,
                        a.q4_score as human_q4_score,
-                       a.q4_reasoning as human_q4_reasoning
+                       a.q4_reasoning as human_q4_reasoning,
+                       a.q4_1_score as human_q4_1_score,
+                       a.q4_1_reasoning as human_q4_1_reasoning,
+                       a.q4_2_score as human_q4_2_score,
+                       a.q4_2_reasoning as human_q4_2_reasoning,
+                       a.q4_3_score as human_q4_3_score,
+                       a.q4_3_reasoning as human_q4_3_reasoning,
+                       a.q4_4_score as human_q4_4_score,
+                       a.q4_4_reasoning as human_q4_4_reasoning
                    FROM responses r
                    JOIN questions q ON r.question_id = q.id
                    LEFT JOIN grades g_q1 ON r.id = g_q1.response_id AND g_q1.grader_id = 'q1'
