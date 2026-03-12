@@ -1,5 +1,6 @@
 """Q1-Q4 Annotation TUI for human grading of model responses."""
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -25,6 +26,7 @@ from moral_bench.database import MoralBenchDB
 from moral_bench.grader_prompts import DEFAULT_QUESTIONS
 
 DB_PATH = Path(__file__).parents[4] / "moralbench.db"
+STATE_PATH = DB_PATH.parent / ".annotator_state.json"
 
 
 QUESTION_ORDER = ["q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"]
@@ -211,6 +213,17 @@ class AnnotateTUI(App):
     #response-header {
         height: auto;
         padding: 0 0 0 0;
+        align: left middle;
+    }
+    #response-header Button {
+        margin: 0 1 0 0;
+    }
+    #back-to-model-btn {
+        min-width: 12;
+    }
+    #prev-response-btn,
+    #next-response-btn {
+        min-width: 10;
     }
     #response-prefix {
         padding: 1 0;
@@ -280,16 +293,16 @@ class AnnotateTUI(App):
     """
 
     BINDINGS = [
-        Binding("f2", "next_question", "Next Q (F2)", show=True, priority=True),
-        Binding("f1", "prev_question", "Prev Q (F1)", show=True, priority=True),
-        Binding("f3", "save_annotation", "Save (F3)", show=True, priority=True),
-        Binding("escape", "back_to_model", "Model Select", show=True),
-        Binding("f4", "toggle_llm_reasoning", "LLM (F4)", show=True),
-        Binding("f5", "skip_response", "Skip (F5)", show=True),
-        Binding("f6", "toggle_filter", "Filter (F6)", show=True),
-        Binding("f7", "next_response", "Next Resp (F7)", show=True),
-        Binding("f8", "prev_response", "Prev Resp (F8)", show=True),
-        Binding("f9", "show_help", "Help (F9)", show=True),
+        Binding("ctrl+d", "next_question", "Next Q (^D)", show=True, priority=True),
+        Binding("ctrl+a", "prev_question", "Prev Q (^A)", show=True, priority=True),
+        Binding("ctrl+s", "save_annotation", "Save (^S)", show=True, priority=True),
+        Binding("escape", "back_to_model", "Model Select", show=True, priority=True),
+        Binding("ctrl+l", "toggle_llm_reasoning", "LLM (^L)", show=True, priority=True),
+        Binding("ctrl+k", "skip_response", "Skip (^K)", show=True, priority=True),
+        Binding("ctrl+f", "toggle_filter", "Filter (^F)", show=True, priority=True),
+        Binding("ctrl+e", "next_response", "Next Resp (^E)", show=True, priority=True),
+        Binding("ctrl+q", "prev_response", "Prev Resp (^Q)", show=True, priority=True),
+        Binding("ctrl+g", "show_help", "Help (^G)", show=True, priority=True),
     ]
 
     def __init__(self) -> None:
@@ -318,9 +331,12 @@ class AnnotateTUI(App):
             with Horizontal(id="main-content"):
                 with Vertical(id="left-panel"):
                     with Horizontal(id="response-header"):
+                        yield Button("← Models", id="back-to-model-btn")
+                        yield Button("← Prev", id="prev-response-btn")
                         yield Label("Response ", id="response-prefix")
                         yield Input("", id="response-idx-input", restrict=r"\d*")
                         yield Label("", id="response-total-label")
+                        yield Button("Next →", id="next-response-btn")
                     yield Static("", id="progress-dots")
                     with VerticalScroll(id="response-scroll"):
                         yield Static("", id="response-panel")
@@ -338,13 +354,13 @@ class AnnotateTUI(App):
                         yield TextArea(id="reasoning-input")
                 yield Static(
                     "[b]Shortcuts[/b]\n"
-                    "F1/F2  Prev/Next Q\n"
-                    "F3     Save\n"
-                    "F4     Show LLM\n"
-                    "F5     Skip\n"
-                    "F6     Filter\n"
-                    "F7/F8  Next/Prev Resp\n"
-                    "F9     Help\n"
+                    "^A/^D  Prev/Next Q\n"
+                    "^S     Save\n"
+                    "^L     Show LLM\n"
+                    "^K     Skip\n"
+                    "^F     Toggle Filter\n"
+                    "^Q/^E  Prev/Next Resp\n"
+                    "^G     Help\n"
                     "Esc    Model Select",
                     id="shortcuts-panel"
                 )
@@ -353,7 +369,40 @@ class AnnotateTUI(App):
 
     def on_mount(self) -> None:
         self.models = self.db.get_models()
-        self.query_one("#model-input", Input).focus()
+        self._restore_app_state()
+        if self.query_one("#annotation-view").has_class("hidden"):
+            self.query_one("#model-input", Input).focus()
+
+    def _restore_app_state(self) -> None:
+        if not STATE_PATH.exists():
+            return
+
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+
+        model = state.get("model")
+        try:
+            response_idx = int(state.get("response_idx", 0))
+        except (TypeError, ValueError):
+            response_idx = 0
+        if model in self.models:
+            self.query_one("#model-input", Input).value = model
+            self._load_model(model, response_idx=response_idx)
+
+    def _save_app_state(self) -> None:
+        if not self.selected_model:
+            return
+
+        state = {
+            "model": self.selected_model,
+            "response_idx": self.current_response_idx,
+        }
+        try:
+            STATE_PATH.write_text(json.dumps(state, indent=2))
+        except OSError:
+            self.notify("Unable to save annotator state", severity="warning")
 
     @on(Input.Changed, "#model-input")
     def filter_models(self, event: Input.Changed) -> None:
@@ -383,13 +432,13 @@ class AnnotateTUI(App):
         if event.option_id:
             self._load_model(str(event.option_id))
 
-    def _load_model(self, model: str) -> None:
+    def _load_model(self, model: str, response_idx: int = 0) -> None:
         self.selected_model = model
         self._refresh_responses()
         if self.responses:
             self.query_one("#model-selector").add_class("hidden")
             self.query_one("#annotation-view").remove_class("hidden")
-            self.current_response_idx = 0
+            self.current_response_idx = min(max(response_idx, 0), len(self.responses) - 1)
             self.current_question = "q1"
             self._display_current()
             self.query_one("#score-input", Input).focus()
@@ -439,6 +488,7 @@ class AnnotateTUI(App):
 
         self._display_question()
         self._update_nav_buttons()
+        self._save_app_state()
 
     def _display_question(self) -> None:
         q_key = self.current_question
@@ -611,17 +661,26 @@ class AnnotateTUI(App):
     def _update_progress_dots(self) -> None:
         n = len(self.responses)
         cur = self.current_response_idx
-        parts = []
+        cell_width = max(3, len(str(n)) + 1)
+        dot_parts = []
+        number_parts = []
         for i, r in enumerate(self.responses):
             status = self._annotation_status(r)
             dot = "●" if status == "full" else ("◐" if status == "partial" else "○")
             color = "green" if status == "full" else ("yellow" if status == "partial" else "dim")
             if i == cur:
-                parts.append(f"[bold white on blue]{dot}[/bold white on blue] ")
+                dot_markup = f"[bold white on blue]{dot}[/bold white on blue]"
+                number_markup = f"[bold white on blue]{i + 1}[/bold white on blue]"
             else:
-                parts.append(f"[{color}]{dot}[/{color}] ")
+                dot_markup = f"[{color}]{dot}[/{color}]"
+                number_markup = f"[{color}]{i + 1}[/{color}]"
 
-        self.query_one("#progress-dots", Static).update("".join(parts))
+            dot_parts.append(f"{dot_markup}{' ' * (cell_width - 1)}")
+            number_parts.append(f"{number_markup}{' ' * (cell_width - len(str(i + 1)))}")
+
+        self.query_one("#progress-dots", Static).update(
+            "".join(dot_parts).rstrip() + "\n" + "".join(number_parts).rstrip()
+        )
 
     @on(Input.Submitted, "#response-idx-input")
     def jump_to_response(self, event: Input.Submitted) -> None:
@@ -680,6 +739,8 @@ class AnnotateTUI(App):
             self.current_response_idx = 0
             self.current_question = "q1"
             self._display_current()
+        else:
+            self.notify("No responses match the current filter", severity="warning")
         status = "unannotated only" if self.show_unannotated_only else "all responses"
         self.notify(f"Filter: {status}")
 
@@ -689,6 +750,21 @@ class AnnotateTUI(App):
     @on(Button.Pressed)
     def on_nav_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id or ""
+        if btn_id == "back-to-model-btn":
+            self.action_back_to_model()
+            event.stop()
+            return
+
+        if btn_id == "prev-response-btn":
+            self.action_prev_response()
+            event.stop()
+            return
+
+        if btn_id == "next-response-btn":
+            self.action_next_response()
+            event.stop()
+            return
+
         if btn_id.endswith("-btn"):
             q_key = btn_id[:-4]  # strip "-btn"
             if q_key in QUESTION_CONFIG:
