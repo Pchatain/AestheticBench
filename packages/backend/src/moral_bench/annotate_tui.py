@@ -29,7 +29,7 @@ DB_PATH = Path(__file__).parents[4] / "moralbench.db"
 STATE_PATH = DB_PATH.parent / ".annotator_state.json"
 
 
-QUESTION_ORDER = ["q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"]
+QUESTION_ORDER = ["q1", "q4_1", "q4_2", "q3", "q4_3", "q2", "q4_4", "q4"]
 
 QUESTION_CONFIG = {
     "q1":  {"name": "Relativism",    "valid": ["yes", "no", "y", "n"], "display": "Yes/No"},
@@ -192,23 +192,15 @@ class AnnotateTUI(App):
         display: block;
     }
     #annotation-view {
-        height: 100%;
-        padding: 1;
+        height: 1fr;
+        padding: 0 1;
     }
-    #main-content {
-        height: 100%;
+    #top-bar {
+        height: auto;
         width: 100%;
     }
-    #left-panel {
-        width: 1fr;
-        height: 100%;
-    }
-    #shortcuts-panel {
-        width: 24;
-        height: auto;
-        border: solid $primary;
-        padding: 0 1;
-        background: $surface;
+    #annotation-view > Horizontal {
+        height: 1fr;
     }
     #response-header {
         height: auto;
@@ -236,22 +228,31 @@ class AnnotateTUI(App):
     }
     #progress-dots {
         height: auto;
-        padding: 0 0 1 0;
+        padding: 0;
     }
-    #response-panel {
-        border: solid $primary;
-        padding: 1;
+    #main-content {
+        height: 1fr;
+        width: 100%;
     }
     #response-scroll {
+        width: 1fr;
         height: 1fr;
-        min-height: 15;
+    }
+    #response-panel {
+        padding: 1;
+    }
+    #right-panel {
+        width: 40;
+        height: 100%;
+        border: solid $secondary;
+        padding: 0 1;
     }
     #question-nav {
         height: 3;
-        padding: 0 1;
+        padding: 0 0;
     }
     #question-nav Button {
-        min-width: 6;
+        min-width: 5;
         margin: 0 0;
     }
     #question-nav Button.active {
@@ -259,8 +260,7 @@ class AnnotateTUI(App):
     }
     #annotation-panel {
         height: auto;
-        border: solid $secondary;
-        padding: 1;
+        padding: 1 0;
     }
     #llm-grade {
         height: auto;
@@ -275,11 +275,16 @@ class AnnotateTUI(App):
         display: block;
     }
     #score-input {
-        width: 20;
+        width: 100%;
     }
     #reasoning-input {
         height: 3;
         width: 100%;
+    }
+    #shortcuts-info {
+        height: auto;
+        padding: 1 0 0 0;
+        color: $text-muted;
     }
     #status-bar {
         height: 1;
@@ -327,19 +332,20 @@ class AnnotateTUI(App):
             yield Label("Select Model:")
             yield Input(placeholder="Type to search models...", id="model-input")
             yield OptionList(id="model-suggestions")
-        with Container(id="annotation-view", classes="hidden"):
+        with Vertical(id="annotation-view", classes="hidden"):
+            with Vertical(id="top-bar"):
+                with Horizontal(id="response-header"):
+                    yield Button("← Models", id="back-to-model-btn")
+                    yield Button("← Prev", id="prev-response-btn")
+                    yield Label("Response ", id="response-prefix")
+                    yield Input("", id="response-idx-input", restrict=r"\d*")
+                    yield Label("", id="response-total-label")
+                    yield Button("Next →", id="next-response-btn")
+                yield Static("", id="progress-dots")
             with Horizontal(id="main-content"):
-                with Vertical(id="left-panel"):
-                    with Horizontal(id="response-header"):
-                        yield Button("← Models", id="back-to-model-btn")
-                        yield Button("← Prev", id="prev-response-btn")
-                        yield Label("Response ", id="response-prefix")
-                        yield Input("", id="response-idx-input", restrict=r"\d*")
-                        yield Label("", id="response-total-label")
-                        yield Button("Next →", id="next-response-btn")
-                    yield Static("", id="progress-dots")
-                    with VerticalScroll(id="response-scroll"):
-                        yield Static("", id="response-panel")
+                with VerticalScroll(id="response-scroll"):
+                    yield Static("", id="response-panel")
+                with VerticalScroll(id="right-panel"):
                     with Horizontal(id="question-nav"):
                         for q in QUESTION_ORDER:
                             yield Button(QUESTION_LABELS[q], id=f"{q}-btn",
@@ -352,18 +358,12 @@ class AnnotateTUI(App):
                         yield Input(placeholder="", id="score-input")
                         yield Label("Reasoning (optional):")
                         yield TextArea(id="reasoning-input")
-                yield Static(
-                    "[b]Shortcuts[/b]\n"
-                    "^A/^D  Prev/Next Q\n"
-                    "^S     Save\n"
-                    "^L     Show LLM\n"
-                    "^K     Skip\n"
-                    "^F     Toggle Filter\n"
-                    "^Q/^E  Prev/Next Resp\n"
-                    "^G     Help\n"
-                    "Esc    Model Select",
-                    id="shortcuts-panel"
-                )
+                    yield Static(
+                        "[dim]^A/^D Prev/Next Q  ^S Save  ^L LLM\n"
+                        "^K Skip  ^F Filter  ^Q/^E Prev/Next\n"
+                        "^G Help  Esc Model Select[/dim]",
+                        id="shortcuts-info"
+                    )
         yield Label("", id="status-bar")
         yield Footer()
 
@@ -403,6 +403,19 @@ class AnnotateTUI(App):
             STATE_PATH.write_text(json.dumps(state, indent=2))
         except OSError:
             self.notify("Unable to save annotator state", severity="warning")
+
+    @on(Input.Changed, "#score-input")
+    def auto_save_score(self, event: Input.Changed) -> None:
+        """Auto-save when the user enters a valid score."""
+        q_key = self.current_question
+        value = event.value.strip()
+        if not value:
+            return
+        normalized = self._validate_score(q_key, value)
+        if normalized is not None:
+            self.human_scores[q_key] = normalized
+            self._persist_annotation()
+            self.notify(f"{QUESTION_LABELS[q_key]} saved", severity="information")
 
     @on(Input.Changed, "#model-input")
     def filter_models(self, event: Input.Changed) -> None:
