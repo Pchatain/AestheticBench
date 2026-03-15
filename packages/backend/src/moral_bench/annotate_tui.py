@@ -27,6 +27,7 @@ from moral_bench.grader_prompts import DEFAULT_QUESTIONS
 
 DB_PATH = Path(__file__).parents[4] / "moralbench.db"
 STATE_PATH = DB_PATH.parent / ".annotator_state.json"
+COMMAND_PATH = DB_PATH.parent / ".annotator_commands.json"
 
 
 QUESTION_ORDER = ["q1", "q4_1", "q4_2", "q3", "q4_3", "q2", "q4_4", "q4"]
@@ -325,6 +326,7 @@ class AnnotateTUI(App):
         self.llm_reasoning_visible: bool = False
         self.human_scores: dict = {}
         self.human_reasoning: dict = {}
+        self._last_command_id: str = ""  # Track processed remote commands
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -372,6 +374,8 @@ class AnnotateTUI(App):
         self._restore_app_state()
         if self.query_one("#annotation-view").has_class("hidden"):
             self.query_one("#model-input", Input).focus()
+        # Start polling for remote commands every 200ms
+        self.set_interval(0.2, self._check_for_commands)
 
     def _restore_app_state(self) -> None:
         if not STATE_PATH.exists():
@@ -398,11 +402,64 @@ class AnnotateTUI(App):
         state = {
             "model": self.selected_model,
             "response_idx": self.current_response_idx,
+            "current_question": self.current_question,
+            "total_responses": len(self.responses),
+            "human_scores": self.human_scores,
+            "timestamp": subprocess.run(
+                ["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
+                capture_output=True, text=True
+            ).stdout.strip(),
         }
         try:
             STATE_PATH.write_text(json.dumps(state, indent=2))
         except OSError:
             self.notify("Unable to save annotator state", severity="warning")
+
+    def _check_for_commands(self) -> None:
+        """Poll for remote commands and execute them."""
+        if not COMMAND_PATH.exists():
+            return
+
+        try:
+            command_data = json.loads(COMMAND_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+
+        command_id = command_data.get("command_id", "")
+        if command_id and command_id != self._last_command_id:
+            self._last_command_id = command_id
+            action = command_data.get("action")
+            value = command_data.get("value")
+            self._execute_remote_command(action, value)
+            # Clear command file after processing
+            try:
+                COMMAND_PATH.unlink()
+            except OSError:
+                pass
+
+    def _execute_remote_command(self, action: str, value: Optional[str]) -> None:
+        """Execute a command received from external process."""
+        # Don't process commands if in model selector mode
+        if not self.selected_model:
+            return
+
+        if action == "next_question":
+            self.action_next_question()
+        elif action == "prev_question":
+            self.action_prev_question()
+        elif action == "set_score" and value is not None:
+            score_input = self.query_one("#score-input", Input)
+            score_input.value = value
+            # Trigger auto-save
+            self._save_current_input()
+        elif action == "save":
+            self.action_save_annotation()
+        elif action == "next_response":
+            self.action_next_response()
+        elif action == "prev_response":
+            self.action_prev_response()
+        elif action == "skip_response":
+            self.action_skip_response()
 
     @on(Input.Changed, "#score-input")
     def auto_save_score(self, event: Input.Changed) -> None:
@@ -555,6 +612,7 @@ class AnnotateTUI(App):
             self.current_question = QUESTION_ORDER[idx + 1]
             self._display_question()
             self._update_nav_buttons()
+            self._save_app_state()
             self.query_one("#score-input", Input).focus()
         else:
             self._show_summary()
@@ -566,6 +624,7 @@ class AnnotateTUI(App):
             self.current_question = QUESTION_ORDER[idx - 1]
             self._display_question()
             self._update_nav_buttons()
+            self._save_app_state()
             self.query_one("#score-input", Input).focus()
 
     def _save_current_input(self) -> None:

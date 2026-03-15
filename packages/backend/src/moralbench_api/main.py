@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import annotations, prompts, results, workflow, experiments
+from .routes import annotations, prompts, results, workflow, experiments, tui
 
 app = FastAPI(title="MoralBench API", version="0.1.0")
 
@@ -20,6 +20,7 @@ app.include_router(annotations.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api")
 app.include_router(workflow.router, prefix="/api")
 app.include_router(experiments.router, prefix="/api")
+app.include_router(tui.router, prefix="/api")
 
 
 @app.get("/health")
