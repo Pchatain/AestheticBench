@@ -1,14 +1,20 @@
 """Results API routes."""
 
 import csv
-import os
-import re
 from pathlib import Path
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+
+from ._shared import (
+    GRADES_DIR,
+    get_latest_graded_files,
+    get_openrouter_headers,
+    load_csv,
+    parse_model_from_filename,
+)
 
 router = APIRouter()
 
@@ -21,21 +27,6 @@ class PlaygroundRequest(BaseModel):
 class PlaygroundResponse(BaseModel):
     response: str
     model: str
-
-
-def get_openrouter_headers() -> dict[str, str]:
-    """Get headers for OpenRouter API requests."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="OPENROUTER_API_KEY not configured on server"
-        )
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://github.com/moralbench",
-        "X-Title": "MoralBench",
-    }
 
 
 @router.post("/playground/run", response_model=PlaygroundResponse)
@@ -65,78 +56,8 @@ async def run_prompt(request: PlaygroundRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Read from results directory set by run.sh
-RESULTS_DIR = Path(os.environ["MORALBENCH_RESULTS_DIR"])
-DATA_DIR = RESULTS_DIR / "v2"
-RESPONSES_DIR = DATA_DIR / "responses"
-GRADES_DIR = DATA_DIR / "grades"
-
 # Base columns that always exist, plus dynamic grading columns
 BASE_COLUMNS = ["uid", "model", "Topic", "Question", "Model Response", "Timestamp"]
-
-
-def parse_model_from_filename(filename: str) -> str:
-    """Extract model name from filename like 'openai_gpt-5_2025-11-26_21-26-11_graded_....csv'."""
-    # Try graded format first: model_timestamp_graded_timestamp.csv
-    match = re.match(r"(.+)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_graded_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.csv", filename)
-    if match:
-        return match.group(1)
-    # Fallback to response format: model_timestamp.csv
-    match = re.match(r"(.+)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.csv", filename)
-    if match:
-        return match.group(1)
-    return filename.replace(".csv", "")
-
-
-def parse_graded_timestamp(filename: str) -> str:
-    """Extract the graded timestamp from filename for sorting.
-    
-    Filename format: model_YYYY-MM-DD_HH-MM-SS_graded_YYYY-MM-DD_HH-MM-SS.csv
-    Returns the second timestamp (grading time) for comparison.
-    """
-    match = re.search(r"_graded_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.csv$", filename)
-    if match:
-        return match.group(1)
-    return ""
-
-
-def get_latest_graded_files() -> dict[str, Path]:
-    """Get the most recent graded file for each model.
-    
-    Returns dict mapping model name to the Path of its most recent graded file.
-    """
-    if not GRADES_DIR.exists():
-        return {}
-    
-    model_files: dict[str, list[tuple[str, Path]]] = {}
-    
-    for f in GRADES_DIR.glob("*.csv"):
-        model_name = parse_model_from_filename(f.name)
-        timestamp = parse_graded_timestamp(f.name)
-        
-        if model_name not in model_files:
-            model_files[model_name] = []
-        model_files[model_name].append((timestamp, f))
-    
-    # Select the file with the latest timestamp for each model
-    latest: dict[str, Path] = {}
-    for model_name, files in model_files.items():
-        # Sort by timestamp descending and take the first
-        files.sort(key=lambda x: x[0], reverse=True)
-        latest[model_name] = files[0][1]
-    
-    return latest
-
-
-def load_csv(filepath: Path) -> list[dict]:
-    """Load a CSV file and return list of dicts with UID added."""
-    rows = []
-    with open(filepath, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for idx, row in enumerate(reader, start=1):
-            row["uid"] = idx
-            rows.append(row)
-    return rows
 
 
 def get_all_headers() -> list[str]:
@@ -259,143 +180,67 @@ def get_grades_summary(
     model_list = [m.strip() for m in models.split(",")] if models else None
     topic_list = [t.strip() for t in topics.split(",")] if topics else None
     
+    # Score column -> accumulator key mapping
+    # Entries with square=True accumulate the square of the value (for preference scores)
+    SCORE_COLUMNS = [
+        ("Preference_1_Score", "preference1", True),
+        ("Preference_2_Score", "preference2", True),
+        ("Justification_Score", "justification", False),
+        ("Q1_Relativism_Score", "q1_relativism", False),
+        ("Q2_Preference_Score", "q2_preference", False),
+        ("Q3_Evidence_Score", "q3_evidence", False),
+        ("Q4_Justification_Score", "q4_justification", False),
+    ]
+
+    def _accumulate_score(scores: dict, key: str, raw: str, square: bool) -> None:
+        """Parse and accumulate a score value, skipping errors."""
+        if not raw or raw.startswith("ERROR") or raw.startswith("PARSE_ERROR"):
+            return
+        try:
+            val = float(raw)
+            scores[f"{key}_sum"] += val ** 2 if square else val
+            scores[f"{key}_count"] += 1
+        except ValueError:
+            pass
+
     # Aggregate scores per model
     model_scores: dict[str, dict] = {}
     topic_counts: dict[str, int] = {}
-    
+
     for model_name, f in latest_files.items():
         if model_list and model_name not in model_list:
             continue
-        
-        model_scores[model_name] = {
-            "preference1_sum": 0.0,
-            "preference1_count": 0,
-            "preference2_sum": 0.0,
-            "preference2_count": 0,
-            "justification_sum": 0.0,
-            "justification_count": 0,
-            "q1_relativism_sum": 0.0,
-            "q1_relativism_count": 0,
-            "q2_preference_sum": 0.0,
-            "q2_preference_count": 0,
-            "q3_evidence_sum": 0.0,
-            "q3_evidence_count": 0,
-            "q4_justification_sum": 0.0,
-            "q4_justification_count": 0,
-            "total_count": 0,
-        }
-        
+
+        scores = {f"{key}_{suffix}": 0.0 if suffix == "sum" else 0
+                  for _, key, _ in SCORE_COLUMNS for suffix in ("sum", "count")}
+        scores["total_count"] = 0
+        model_scores[model_name] = scores
+
         rows = load_csv(f)
         for row in rows:
             topic = row.get("Topic", "")
-            
+
             if topic_list and topic not in topic_list:
                 continue
-            
-            # Count topics
+
             if topic:
                 topic_counts[topic] = topic_counts.get(topic, 0) + 1
-            
-            model_scores[model_name]["total_count"] += 1
-            
-            # Parse and accumulate scores
-            pref1 = row.get("Preference_1_Score", "")
-            if pref1 and not pref1.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["preference1_sum"] += float(pref1)**2
-                    model_scores[model_name]["preference1_count"] += 1
-                except ValueError:
-                    pass
-            
-            pref2 = row.get("Preference_2_Score", "")
-            if pref2 and not pref2.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["preference2_sum"] += float(pref2)**2
-                    model_scores[model_name]["preference2_count"] += 1
-                except ValueError:
-                    pass
-            
-            justification = row.get("Justification_Score", "")
-            if justification and not justification.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["justification_sum"] += float(justification)
-                    model_scores[model_name]["justification_count"] += 1
-                except ValueError:
-                    pass
 
-            # Q1 Relativism Score (binary: 0/1)
-            q1 = row.get("Q1_Relativism_Score", "")
-            if q1 and not q1.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["q1_relativism_sum"] += float(q1)
-                    model_scores[model_name]["q1_relativism_count"] += 1
-                except ValueError:
-                    pass
+            scores["total_count"] += 1
 
-            # Q2 Preference Score (ternary: -1/0/1)
-            q2 = row.get("Q2_Preference_Score", "")
-            if q2 and not q2.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["q2_preference_sum"] += float(q2)
-                    model_scores[model_name]["q2_preference_count"] += 1
-                except ValueError:
-                    pass
+            for col, key, square in SCORE_COLUMNS:
+                _accumulate_score(scores, key, row.get(col, ""), square)
 
-            # Q3 Evidence Score (ternary: -1/0/1)
-            q3 = row.get("Q3_Evidence_Score", "")
-            if q3 and not q3.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["q3_evidence_sum"] += float(q3)
-                    model_scores[model_name]["q3_evidence_count"] += 1
-                except ValueError:
-                    pass
-
-            # Q4 Justification Quality Score (scale: 1-5)
-            q4 = row.get("Q4_Justification_Score", "")
-            if q4 and not q4.startswith("ERROR"):
-                try:
-                    model_scores[model_name]["q4_justification_sum"] += float(q4)
-                    model_scores[model_name]["q4_justification_count"] += 1
-                except ValueError:
-                    pass
-    
     # Calculate averages
     summaries = []
     for model_name, scores in model_scores.items():
-        summary = {
-            "model": model_name,
-            "preference1_avg": (
-                scores["preference1_sum"] / scores["preference1_count"]
-                if scores["preference1_count"] > 0 else None
-            ),
-            "preference2_avg": (
-                scores["preference2_sum"] / scores["preference2_count"]
-                if scores["preference2_count"] > 0 else None
-            ),
-            "justification_avg": (
-                scores["justification_sum"] / scores["justification_count"]
-                if scores["justification_count"] > 0 else None
-            ),
-            "q1_relativism_avg": (
-                scores["q1_relativism_sum"] / scores["q1_relativism_count"]
-                if scores["q1_relativism_count"] > 0 else None
-            ),
-            "q2_preference_avg": (
-                scores["q2_preference_sum"] / scores["q2_preference_count"]
-                if scores["q2_preference_count"] > 0 else None
-            ),
-            "q3_evidence_avg": (
-                scores["q3_evidence_sum"] / scores["q3_evidence_count"]
-                if scores["q3_evidence_count"] > 0 else None
-            ),
-            "q4_justification_avg": (
-                scores["q4_justification_sum"] / scores["q4_justification_count"]
-                if scores["q4_justification_count"] > 0 else None
-            ),
-            "count": scores["total_count"],
-        }
+        summary: dict = {"model": model_name}
+        for _, key, _ in SCORE_COLUMNS:
+            s, c = scores[f"{key}_sum"], scores[f"{key}_count"]
+            summary[f"{key}_avg"] = s / c if c > 0 else None
+        summary["count"] = scores["total_count"]
         summaries.append(summary)
-    
+
     return {"summaries": summaries, "topic_counts": topic_counts}
 
 
