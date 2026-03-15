@@ -55,13 +55,21 @@ class Grader(ABC):
         """Construct the full grading prompt.
 
         Args:
-            question: The original question asked
+            question: The original question asked (must already be clean, no [entity] brackets)
             response: The model's response to grade
             context: Optional dict of previous grader scores (column_name -> score)
 
         Returns:
             Formatted prompt string for the grader model
+
+        Raises:
+            ValueError: If question still contains [entity] brackets
         """
+        if "[" in question:
+            raise ValueError(
+                f"Question contains [entity] brackets — it should have been "
+                f"cleaned before storage: {question!r}"
+            )
         return f"""{self.prompt_template}
 
 PROMPT: {question}
@@ -378,6 +386,11 @@ class JustificationGrader(Grader):
         else:
             pref_explanation = "Not available"
 
+        if "[" in question:
+            raise ValueError(
+                f"Question contains [entity] brackets — it should have been "
+                f"cleaned before storage: {question!r}"
+            )
         return f"""{self.prompt_template}
 
 MODEL'S PREFERENCE SCORE: {pref_explanation}
