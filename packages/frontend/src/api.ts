@@ -3,6 +3,7 @@ import type {
   AnnotationLookupResponse,
   AnnotationsResponse,
   AnnotationSaveResponse,
+  HeatmapResponse,
   CancelResponse,
   DefaultQuestionsResponse,
   DryRunEstimateResponse,
@@ -400,5 +401,10 @@ export async function saveQ1Q4Annotation(data: Q1Q4AnnotationCreate): Promise<Q1
 
 export async function fetchQ1Q4Models(): Promise<Q1Q4ModelsResponse> {
   const res = await fetch(`${API_BASE}/annotations/q1q4/models`)
+  return res.json()
+}
+
+export async function fetchGradesHeatmap(): Promise<HeatmapResponse> {
+  const res = await fetch(`${API_BASE}/grades/heatmap`)
   return res.json()
 }

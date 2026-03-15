@@ -399,6 +399,57 @@ def get_grades_summary(
     return {"summaries": summaries, "topic_counts": topic_counts}
 
 
+SCORE_COLUMN_MAP = {
+    "q1": "Q1_Relativism_Score",
+    "q2": "Q2_Preference_Score",
+    "q3": "Q3_Evidence_Score",
+    "q4": "Q4_Justification_Score",
+    "q4_1": "Q4_1_Factual_Depth_Score",
+    "q4_2": "Q4_2_Specificity_Score",
+    "q4_3": "Q4_3_Synthesis_Score",
+    "q4_4": "Q4_4_Consistency_Score",
+}
+
+
+@router.get("/grades/heatmap")
+def get_grades_heatmap():
+    """Get all LLM grades for heatmap visualization.
+
+    Reads Q1-Q4 (and Q4.1-Q4.4 when available) from graded CSV files.
+    Returns one row per (model, uid) pair.
+    """
+    latest_files = get_latest_graded_files()
+    if not latest_files:
+        return {"data": []}
+
+    data: list[dict] = []
+    for model_name, f in latest_files.items():
+        rows = load_csv(f)
+        for row in rows:
+            entry: dict = {
+                "uid": row["uid"],
+                "model": model_name,
+                "topic": row.get("Topic", ""),
+                "question": row.get("Question", ""),
+                "response": row.get("Model Response", ""),
+            }
+            for key, col in SCORE_COLUMN_MAP.items():
+                entry[key] = _safe_score(row.get(col))
+            data.append(entry)
+
+    return {"data": data}
+
+
+def _safe_score(val: Optional[str]) -> Optional[float]:
+    """Parse a score string to float, returning None on error."""
+    if not val or str(val).startswith("ERROR"):
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
 @router.get("/grades/{model}")
 def get_grades(model: str):
     """Get grades for a specific model (uses latest graded file only)."""

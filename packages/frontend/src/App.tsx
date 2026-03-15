@@ -10,6 +10,7 @@ import { Annotator } from './components/Annotator'
 import { Q1Q4Annotator } from './components/Q1Q4Annotator'
 import { CommandCenter } from './components/CommandCenter'
 import { JustificationExperiment } from './components/JustificationExperiment'
+import { GradeExplorer } from './components/GradeExplorer'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
 import type { Model, Result } from './types'
 
@@ -77,6 +78,7 @@ function App() {
         {currentPage === 'command-center' && <CommandCenter />}
         {currentPage === 'annotator' && <Annotator />}
         {currentPage === 'q1q4-annotator' && <Q1Q4Annotator />}
+        {currentPage === 'grade-explorer' && <GradeExplorer />}
         {currentPage === 'comparison' && <ModelComparison />}
         {currentPage === 'analytics' && <Analytics />}
         {currentPage === 'experiment' && <JustificationExperiment />}
