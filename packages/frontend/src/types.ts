@@ -3,6 +3,26 @@ export interface Model {
   filename: string
 }
 
+export interface HeatmapEntry {
+  uid: number
+  model: string
+  topic: string
+  question: string
+  response: string
+  q1: number | null
+  q2: number | null
+  q3: number | null
+  q4: number | null
+  q4_1: number | null
+  q4_2: number | null
+  q4_3: number | null
+  q4_4: number | null
+}
+
+export interface HeatmapResponse {
+  data: HeatmapEntry[]
+}
+
 // Dynamic result with arbitrary columns from graded files
 export type Result = Record<string, string | number>
 

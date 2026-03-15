@@ -1,18 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts'
+import createPlotlyComponent from 'react-plotly.js/factory'
+import Plotly from 'plotly.js-dist-min'
 import { fetchModels, fetchTopics, fetchGradesSummary } from '../api'
 import type { Model, GradesSummary } from '../types'
 import { useAppStore } from '../store'
 import { CollapsibleSection } from './CollapsibleSection'
+
+const Plot = createPlotlyComponent(Plotly)
 
 const COLORS = [
   '#8884d8',
@@ -29,11 +23,15 @@ const COLORS = [
   '#a4de6c',
 ]
 
-interface ChartDataPoint {
-  metric: string
-  fullMark: number
-  [key: string]: string | number
-}
+const RADAR_METRICS = [
+  'Preference 1',
+  'Preference 2',
+  'Justification',
+  'Q1 Relativism',
+  'Q2 Preference',
+  'Q3 Evidence',
+  'Q4 Justification',
+]
 
 export function ModelComparison() {
   const [models, setModels] = useState<Model[]>([])
@@ -133,55 +131,32 @@ export function ModelComparison() {
     }
   }
 
-  // Transform summaries to chart data format
-  // Normalize scores to 0-100 scale for radar chart
-  const chartData: ChartDataPoint[] = [
-    { metric: 'Preference 1', fullMark: 100 },
-    { metric: 'Preference 2', fullMark: 100 },
-    { metric: 'Justification', fullMark: 100 },
-    { metric: 'Q1 Relativism', fullMark: 100 },
-    { metric: 'Q2 Preference', fullMark: 100 },
-    { metric: 'Q3 Evidence', fullMark: 100 },
-    { metric: 'Q4 Justification', fullMark: 100 },
-  ]
+  // Build Plotly scatterpolar traces
+  function normalize(val: number | null | undefined, min: number, max: number): number {
+    if (val === null || val === undefined) return 0
+    return Math.round(((val - min) / (max - min)) * 100 * 100) / 100
+  }
 
-  summaries.forEach((summary) => {
-    // Preference 1: -1 to 1 -> 0 to 100
-    const pref1Normalized = summary.preference1_avg !== null
-      ? ((summary.preference1_avg + 1) / 2) * 100
-      : 0
-    // Preference 2: -1 to 1 -> 0 to 100
-    const pref2Normalized = summary.preference2_avg !== null
-      ? ((summary.preference2_avg + 1) / 2) * 100
-      : 0
-    // Justification: 1 to 5 -> 0 to 100
-    const justNormalized = summary.justification_avg !== null
-      ? ((summary.justification_avg - 1) / 4) * 100
-      : 0
-    // Q1 Relativism: 0 to 1 -> 0 to 100
-    const q1Normalized = summary.q1_relativism_avg !== null && summary.q1_relativism_avg !== undefined
-      ? summary.q1_relativism_avg * 100
-      : 0
-    // Q2 Preference: -1 to 1 -> 0 to 100
-    const q2Normalized = summary.q2_preference_avg !== null && summary.q2_preference_avg !== undefined
-      ? ((summary.q2_preference_avg + 1) / 2) * 100
-      : 0
-    // Q3 Evidence: -1 to 1 -> 0 to 100
-    const q3Normalized = summary.q3_evidence_avg !== null && summary.q3_evidence_avg !== undefined
-      ? ((summary.q3_evidence_avg + 1) / 2) * 100
-      : 0
-    // Q4 Justification Quality: 1 to 5 -> 0 to 100
-    const q4Normalized = summary.q4_justification_avg !== null && summary.q4_justification_avg !== undefined
-      ? ((summary.q4_justification_avg - 1) / 4) * 100
-      : 0
-
-    chartData[0][summary.model] = Math.round(pref1Normalized * 100) / 100
-    chartData[1][summary.model] = Math.round(pref2Normalized * 100) / 100
-    chartData[2][summary.model] = Math.round(justNormalized * 100) / 100
-    chartData[3][summary.model] = Math.round(q1Normalized * 100) / 100
-    chartData[4][summary.model] = Math.round(q2Normalized * 100) / 100
-    chartData[5][summary.model] = Math.round(q3Normalized * 100) / 100
-    chartData[6][summary.model] = Math.round(q4Normalized * 100) / 100
+  const radarTraces: Partial<Plotly.PlotData>[] = summaries.map((summary) => {
+    const r = [
+      normalize(summary.preference1_avg, -1, 1),
+      normalize(summary.preference2_avg, -1, 1),
+      normalize(summary.justification_avg, 1, 5),
+      normalize(summary.q1_relativism_avg, 0, 1),
+      normalize(summary.q2_preference_avg, -1, 1),
+      normalize(summary.q3_evidence_avg, -1, 1),
+      normalize(summary.q4_justification_avg, 1, 5),
+    ]
+    const color = COLORS[models.findIndex((m) => m.name === summary.model) % COLORS.length]
+    return {
+      type: 'scatterpolar' as Plotly.PlotType,
+      r: [...r, r[0]],
+      theta: [...RADAR_METRICS, RADAR_METRICS[0]],
+      fill: 'toself',
+      fillcolor: color + '33',
+      line: { color },
+      name: summary.model,
+    }
   })
 
   const displayedTopicCounts = selectedTopics.length > 0
@@ -284,32 +259,19 @@ export function ModelComparison() {
             <div className="text-gray-500">Select at least one model to see the comparison chart</div>
           </div>
         ) : (
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={chartData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="metric" />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                {summaries.map((summary) => (
-                  <Radar
-                    key={summary.model}
-                    name={summary.model}
-                    dataKey={summary.model}
-                    stroke={COLORS[models.findIndex(m => m.name === summary.model) % COLORS.length]}
-                    fill={COLORS[models.findIndex(m => m.name === summary.model) % COLORS.length]}
-                    fillOpacity={0.2}
-                  />
-                ))}
-                <Legend />
-                <Tooltip
-                  formatter={(value: number, name: string) => [
-                    `${value.toFixed(2)}%`,
-                    name
-                  ]}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
+          <Plot
+            data={radarTraces as Plotly.Data[]}
+            layout={{
+              polar: {
+                radialaxis: { visible: true, range: [0, 100] },
+              },
+              showlegend: true,
+              height: 500,
+              margin: { t: 40, b: 40 },
+            }}
+            config={{ responsive: true }}
+            style={{ width: '100%' }}
+          />
         )}
         <div className="mt-4 text-xs text-gray-500">
           <p>Score normalization:</p>

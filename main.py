@@ -215,6 +215,10 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
     print("  6. q2            - Preference (-1, 0, 1)")
     print("  7. q3            - Evidence evaluation (-1, 0, 1)")
     print("  8. q4            - Justification quality (1-5)")
+    print("  9. q4_1          - Factual Depth (0/1)")
+    print(" 10. q4_2          - Specificity (0/1)")
+    print(" 11. q4_3          - Synthesis (0/1)")
+    print(" 12. q4_4          - Consistency (0/1)")
     print("\nYou can select multiple graders (comma-separated).")
     print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1,q2,q3,q4'\n")
 
@@ -227,6 +231,10 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
         "6": "q2",
         "7": "q3",
         "8": "q4",
+        "9": "q4_1",
+        "10": "q4_2",
+        "11": "q4_3",
+        "12": "q4_4",
         "preference1": "preference1",
         "preference2": "preference2",
         "justification": "justification",
@@ -235,7 +243,11 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
         "q2": "q2",
         "q3": "q3",
         "q4": "q4",
-        "all": ["preference1", "preference2", "justification", "q1", "q2", "q3", "q4"],
+        "q4_1": "q4_1",
+        "q4_2": "q4_2",
+        "q4_3": "q4_3",
+        "q4_4": "q4_4",
+        "all": ["preference1", "preference2", "justification", "q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"],
     }
 
     selection = typer.prompt("Select graders")

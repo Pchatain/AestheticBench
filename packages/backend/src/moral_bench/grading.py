@@ -737,7 +737,7 @@ class Q4JustificationGrader(Grader):
     def __init__(self):
         super().__init__(
             name="q4",
-            prompt_template=DEFAULT_QUESTIONS["q4"]["prompt"],
+            prompt_template=GRADER_JUSTIFICATION_PROMPT,
             column_name="Q4_Justification_Score",
             reasoning_column_name="Q4_Justification_Reasoning",
         )
@@ -775,6 +775,88 @@ class Q4JustificationGrader(Grader):
             return False
 
 
+class _BinarySubquestionGrader(Grader):
+    """Base grader for Q4 sub-questions (binary 0/1 scoring)."""
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        try:
+            val = int(raw_score)
+            return val if val in (0, 1) else None
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+            r'(?:^|\s)(\d+)(?:\s|$|\.)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+        return None
+
+    def validate(self, score: Any) -> bool:
+        try:
+            return int(score) in {0, 1}
+        except (ValueError, TypeError):
+            return False
+
+
+class Q4_1FactualDepthGrader(_BinarySubquestionGrader):
+    """Grader for Q4.1: Factual Depth (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q4_1",
+            prompt_template=DEFAULT_QUESTIONS["q4_1"]["prompt"],
+            column_name="Q4_1_Factual_Depth_Score",
+            reasoning_column_name="Q4_1_Factual_Depth_Reasoning",
+        )
+
+
+class Q4_2SpecificityGrader(_BinarySubquestionGrader):
+    """Grader for Q4.2: Specificity (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q4_2",
+            prompt_template=DEFAULT_QUESTIONS["q4_2"]["prompt"],
+            column_name="Q4_2_Specificity_Score",
+            reasoning_column_name="Q4_2_Specificity_Reasoning",
+        )
+
+
+class Q4_3SynthesisGrader(_BinarySubquestionGrader):
+    """Grader for Q4.3: Synthesis (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q4_3",
+            prompt_template=DEFAULT_QUESTIONS["q4_3"]["prompt"],
+            column_name="Q4_3_Synthesis_Score",
+            reasoning_column_name="Q4_3_Synthesis_Reasoning",
+        )
+
+
+class Q4_4ConsistencyGrader(_BinarySubquestionGrader):
+    """Grader for Q4.4: Consistency (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q4_4",
+            prompt_template=DEFAULT_QUESTIONS["q4_4"]["prompt"],
+            column_name="Q4_4_Consistency_Score",
+            reasoning_column_name="Q4_4_Consistency_Reasoning",
+        )
+
+
 class GraderRegistry:
     """Factory for creating grader instances."""
 
@@ -792,6 +874,10 @@ class GraderRegistry:
             "q2": Q2PreferenceGrader(),
             "q3": Q3EvidenceGrader(),
             "q4": Q4JustificationGrader(),
+            "q4_1": Q4_1FactualDepthGrader(),
+            "q4_2": Q4_2SpecificityGrader(),
+            "q4_3": Q4_3SynthesisGrader(),
+            "q4_4": Q4_4ConsistencyGrader(),
         }
 
         if grader_id not in graders:
@@ -805,7 +891,12 @@ class GraderRegistry:
     @staticmethod
     def list_graders() -> list[str]:
         """List all available grader IDs."""
-        return ["preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q2", "q3", "q4"]
+        return [
+            "preference1", "preference2", "justification",
+            "relativism", "whimsical", "factual_depth",
+            "q1", "q2", "q3", "q4",
+            "q4_1", "q4_2", "q4_3", "q4_4",
+        ]
 
 
 class GradingProcessor:
