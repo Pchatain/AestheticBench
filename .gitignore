@@ -37,3 +37,6 @@ build/
 **/node_modules/.vite
 **/.vite
 **/.vite-env
+
+# vite build info
+**/tsconfig.tsbuildinfo
