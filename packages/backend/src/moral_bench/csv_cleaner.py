@@ -159,7 +159,7 @@ def combine_results(results_dir: Path, model_ordering: List[str] = None) -> None
             )
 
     # Create combined CSV
-    output_file = results_dir / "combined_v1.csv"
+    output_file = results_dir / "combined.csv"
 
     with open(output_file, "w", encoding="utf-8", newline="") as f:
         # Create header

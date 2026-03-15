@@ -1,7 +1,6 @@
 """Experiments API routes for custom justification grading."""
 
 import csv
-import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -13,12 +12,15 @@ from pydantic import BaseModel
 
 from moral_bench.grader_prompts import DEFAULT_QUESTIONS
 
-router = APIRouter()
+from ._shared import (
+    GRADES_DIR,
+    RESULTS_DIR,
+    get_latest_graded_files,
+    get_openrouter_headers,
+    load_csv,
+)
 
-# Read from results directory set by run.sh
-RESULTS_DIR = Path(os.environ["MORALBENCH_RESULTS_DIR"])
-DATA_DIR = RESULTS_DIR / "v2"
-GRADES_DIR = DATA_DIR / "grades"
+router = APIRouter()
 
 # Directory for saving experiment results
 EXPERIMENTS_DIR = RESULTS_DIR / "experiments"
@@ -88,73 +90,6 @@ class SaveExperimentResponse(BaseModel):
     filepath: str
     saved: bool
 
-
-def get_openrouter_headers() -> dict[str, str]:
-    """Get headers for OpenRouter API requests."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="OPENROUTER_API_KEY not configured on server"
-        )
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://github.com/moralbench",
-        "X-Title": "MoralBench",
-    }
-
-
-def parse_model_from_filename(filename: str) -> str:
-    """Extract model name from filename."""
-    match = re.match(r"(.+)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_graded_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.csv", filename)
-    if match:
-        return match.group(1)
-    match = re.match(r"(.+)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.csv", filename)
-    if match:
-        return match.group(1)
-    return filename.replace(".csv", "")
-
-
-def parse_graded_timestamp(filename: str) -> str:
-    """Extract the graded timestamp from filename for sorting."""
-    match = re.search(r"_graded_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.csv$", filename)
-    if match:
-        return match.group(1)
-    return ""
-
-
-def get_latest_graded_files() -> dict[str, Path]:
-    """Get the most recent graded file for each model."""
-    if not GRADES_DIR.exists():
-        return {}
-    
-    model_files: dict[str, list[tuple[str, Path]]] = {}
-    
-    for f in GRADES_DIR.glob("*.csv"):
-        model_name = parse_model_from_filename(f.name)
-        timestamp = parse_graded_timestamp(f.name)
-        
-        if model_name not in model_files:
-            model_files[model_name] = []
-        model_files[model_name].append((timestamp, f))
-    
-    latest: dict[str, Path] = {}
-    for model_name, files in model_files.items():
-        files.sort(key=lambda x: x[0], reverse=True)
-        latest[model_name] = files[0][1]
-    
-    return latest
-
-
-def load_csv(filepath: Path) -> list[dict]:
-    """Load a CSV file and return list of dicts with UID added."""
-    rows = []
-    with open(filepath, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for idx, row in enumerate(reader, start=1):
-            row["uid"] = idx
-            rows.append(row)
-    return rows
 
 
 def parse_binary_response(response: str) -> Optional[str]:

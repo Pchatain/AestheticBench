@@ -245,11 +245,11 @@ class DiscoveryService:
         """Derive output directory from prompt file name.
 
         Args:
-            prompts_file: Path to the prompt file (e.g., prompts/v1.csv)
+            prompts_file: Path to the prompt file (e.g., prompts/v2.tsv)
             subdir: Subdirectory within results/{version}/
 
         Returns:
-            Path to output directory (e.g., results/v1/responses)
+            Path to output directory (e.g., results/v2/responses)
         """
         version = prompts_file.stem
         return self.results_base / version / subdir
