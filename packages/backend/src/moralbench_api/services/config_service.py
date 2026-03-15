@@ -48,7 +48,7 @@ class FileValidationResult:
 class ConfigService:
     """Service for validation and configuration resolution."""
 
-    VALID_GRADERS = {"preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q2", "q3", "q4"}
+    VALID_GRADERS = {"preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"}
 
     GRADER_DEPENDENCIES = {
         "justification": ["preference1"],
@@ -102,6 +102,34 @@ class ConfigService:
             name="Q4 Justification Quality",
             description="Quality of justification (depth, specificity, synthesis, consistency)",
             score_range="1 to 5",
+            dependencies=[],
+        ),
+        "q4_1": GraderInfo(
+            id="q4_1",
+            name="Q4.1 Factual Depth",
+            description="Does the response include substantive, relevant facts?",
+            score_range="0 (no), 1 (yes)",
+            dependencies=[],
+        ),
+        "q4_2": GraderInfo(
+            id="q4_2",
+            name="Q4.2 Specificity",
+            description="Is the justification specific with concrete observations?",
+            score_range="0 (no), 1 (yes)",
+            dependencies=[],
+        ),
+        "q4_3": GraderInfo(
+            id="q4_3",
+            name="Q4.3 Synthesis",
+            description="Does the model synthesize multiple considerations coherently?",
+            score_range="0 (no), 1 (yes)",
+            dependencies=[],
+        ),
+        "q4_4": GraderInfo(
+            id="q4_4",
+            name="Q4.4 Consistency",
+            description="Is the conclusion consistent with the evidence presented?",
+            score_range="0 (no), 1 (yes)",
             dependencies=[],
         ),
     }
