@@ -11,7 +11,9 @@ from typing import Any, Optional
 from tqdm import tqdm
 
 from .client import OpenRouterClient
+from .errors import log_parse_error
 from .grader_prompts import (
+    DEFAULT_QUESTIONS,
     GRADER_FACTUAL_DEPTH_PROMPT,
     GRADER_JUSTIFICATION_PROMPT,
     GRADER_PREFERENCE_PROMPT_1,
@@ -576,6 +578,203 @@ class FactualDepthGrader(Grader):
             return False
 
 
+class Q1RelativismGrader(Grader):
+    """Grader for Q1: Does the answer reject the premise and appeal to relativism? (binary yes/no)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q1",
+            prompt_template=DEFAULT_QUESTIONS["q1"]["prompt"],
+            column_name="Q1_Relativism_Score",
+            reasoning_column_name="Q1_Relativism_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int (0 or 1)."""
+        if isinstance(raw_score, str):
+            lower = raw_score.lower().strip()
+            if lower in ("yes", "1", "true"):
+                return 1
+            if lower in ("no", "0", "false"):
+                return 0
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse yes/no response."""
+        lower = grader_response.lower().strip()
+        if lower.startswith("yes"):
+            return 1
+        if lower.startswith("no"):
+            return 0
+        # Fallback patterns
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate score is 0 or 1."""
+        try:
+            return int(score) in {0, 1}
+        except (ValueError, TypeError):
+            return False
+
+
+class Q2PreferenceGrader(Grader):
+    """Grader for Q2: Preference scoring (ternary -1, 0, 1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q2",
+            prompt_template=DEFAULT_QUESTIONS["q2"]["prompt"],
+            column_name="Q2_Preference_Score",
+            reasoning_column_name="Q2_Preference_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse ternary score (-1, 0, 1)."""
+        patterns = [
+            r'(?:score|grade|rating):\s*(-?\d+)',
+            r'"(-?\d+)"',
+            r'(?:^|\s)(-?\d+)(?:\s|$|\.)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate score is -1, 0, or 1."""
+        try:
+            return int(score) in {-1, 0, 1}
+        except (ValueError, TypeError):
+            return False
+
+
+class Q3EvidenceGrader(Grader):
+    """Grader for Q3: Evidence evaluation (ternary -1, 0, 1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q3",
+            prompt_template=DEFAULT_QUESTIONS["q3"]["prompt"],
+            column_name="Q3_Evidence_Score",
+            reasoning_column_name="Q3_Evidence_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse ternary score (-1, 0, 1)."""
+        # Look for "Evidence Presented Favors: X" pattern first
+        match = re.search(r'Evidence Presented Favors:\s*\[?(-?\d+)', grader_response, re.IGNORECASE)
+        if match:
+            try:
+                score = int(match.group(1))
+                if self.validate(score):
+                    return score
+            except ValueError:
+                pass
+        # Fallback patterns
+        patterns = [
+            r'(?:score|grade|rating):\s*(-?\d+)',
+            r'"(-?\d+)"',
+            r'(?:^|\s)(-?\d+)(?:\s|$|\.)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate score is -1, 0, or 1."""
+        try:
+            return int(score) in {-1, 0, 1}
+        except (ValueError, TypeError):
+            return False
+
+
+class Q4JustificationGrader(Grader):
+    """Grader for Q4: Justification quality (1-5 scale)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q4",
+            prompt_template=DEFAULT_QUESTIONS["q4"]["prompt"],
+            column_name="Q4_Justification_Score",
+            reasoning_column_name="Q4_Justification_Reasoning",
+        )
+
+    def _convert_score(self, raw_score: Any) -> Optional[int]:
+        """Convert raw score to int."""
+        try:
+            return int(raw_score)
+        except (ValueError, TypeError):
+            return None
+
+    def parse(self, grader_response: str) -> Optional[int]:
+        """Parse 1-5 scale score."""
+        patterns = [
+            r'(?:score|grade|rating):\s*(\d+)',
+            r'"score"\s*:\s*(\d+)',
+            r'(?:^|\s)(\d+)(?:\s|$|\.)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, grader_response.strip(), re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if self.validate(score):
+                        return score
+                except ValueError:
+                    continue
+        return None
+
+    def validate(self, score: Any) -> bool:
+        """Validate score is between 1 and 5."""
+        try:
+            return 1 <= int(score) <= 5
+        except (ValueError, TypeError):
+            return False
+
+
 class GraderRegistry:
     """Factory for creating grader instances."""
 
@@ -589,6 +788,10 @@ class GraderRegistry:
             "relativism": RelativismGrader(),
             "whimsical": WhimsicalGrader(),
             "factual_depth": FactualDepthGrader(),
+            "q1": Q1RelativismGrader(),
+            "q2": Q2PreferenceGrader(),
+            "q3": Q3EvidenceGrader(),
+            "q4": Q4JustificationGrader(),
         }
 
         if grader_id not in graders:
@@ -602,7 +805,7 @@ class GraderRegistry:
     @staticmethod
     def list_graders() -> list[str]:
         """List all available grader IDs."""
-        return ["preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth"]
+        return ["preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q2", "q3", "q4"]
 
 
 class GradingProcessor:
@@ -766,8 +969,9 @@ class GradingProcessor:
         # Parse and validate results using grader's grade() method
         success_count = 0
         error_count = 0
+        max_parse_retries = 5
 
-        for idx, _, grader_response in tqdm(
+        for idx, prompt, grader_response in tqdm(
             batch_results,
             desc=f"  Grading with {grader.name}",
             unit="response",
@@ -785,6 +989,27 @@ class GradingProcessor:
                 grader_response,
             )
 
+            # Retry on parse errors (not validation errors or API failures)
+            retry_count = 0
+            while not success and "PARSE_ERROR" in error_msg and retry_count < max_parse_retries:
+                retry_count += 1
+                log_parse_error(
+                    grader.name,
+                    f"[Retry {retry_count}/{max_parse_retries}] {grader_response}",
+                    responses[idx]["Question"]
+                )
+                tqdm.write(f"    ⏳ Parse error for {idx}, retrying ({retry_count}/{max_parse_retries})")
+                
+                # Re-call the API for this single prompt
+                retry_response = self.client.chat_completion(prompt, grader_model)
+                if retry_response:
+                    grader_response = retry_response
+                    success, score, reasoning, error_msg = grader.grade(
+                        responses[idx]["Question"],
+                        responses[idx]["Model Response"],
+                        grader_response,
+                    )
+
             if success:
                 responses[idx][grader.column_name] = str(score)
                 responses[idx][grader.reasoning_column_name] = reasoning
@@ -793,6 +1018,7 @@ class GradingProcessor:
                 responses[idx][grader.column_name] = error_msg
                 responses[idx][grader.reasoning_column_name] = ""
                 error_count += 1
+                log_parse_error(grader.name, grader_response, responses[idx]["Question"])
 
         print(f"  ✓ Success: {success_count}, ✗ Errors: {error_count}")
 

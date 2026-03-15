@@ -18,6 +18,7 @@ import {
   saveMultiExperimentResults,
 } from '../api'
 import type { Model, ExperimentPrompt, PromptResult, QuestionConfig } from '../types'
+import { CollapsibleSection } from './CollapsibleSection'
 
 const COLORS = [
   '#8884d8',
@@ -616,11 +617,13 @@ export function JustificationExperiment() {
             const histogramData = buildHistogramData(qId)
             const stats = getSummaryStats(qId)
             const meta = QUESTION_META[qId]
-            
+
             return (
-              <div key={qId} className="bg-white rounded-lg shadow p-4">
-                <h4 className="font-semibold text-gray-700 mb-2">{meta?.name}</h4>
-                
+              <CollapsibleSection
+                key={qId}
+                id={`experiment-${qId}-hist`}
+                title={meta?.name || `Question ${qId.toUpperCase()}`}
+              >
                 {/* Summary stats */}
                 <div className="flex gap-4 mb-4 flex-wrap">
                   {stats.map((stat) => (
@@ -634,15 +637,15 @@ export function JustificationExperiment() {
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Histogram */}
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={histogramData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="category" 
-                        label={{ value: meta?.name.split(':')[1]?.trim() || 'Score', position: 'insideBottom', offset: -5 }} 
+                      <XAxis
+                        dataKey="category"
+                        label={{ value: meta?.name.split(':')[1]?.trim() || 'Score', position: 'insideBottom', offset: -5 }}
                       />
                       <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
                       <Tooltip />
@@ -657,13 +660,12 @@ export function JustificationExperiment() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </CollapsibleSection>
             )
           })}
 
           {/* Detailed Results Table */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-semibold text-gray-700 mb-3">Detailed Results</h3>
+          <CollapsibleSection id="experiment-results-table" title="Detailed Results Table">
             <div className="max-h-96 overflow-auto border border-gray-200 rounded-lg">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 sticky top-0">
@@ -730,7 +732,7 @@ export function JustificationExperiment() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </CollapsibleSection>
         </div>
       )}
     </div>

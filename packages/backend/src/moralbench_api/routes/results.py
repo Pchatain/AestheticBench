@@ -274,6 +274,14 @@ def get_grades_summary(
             "preference2_count": 0,
             "justification_sum": 0.0,
             "justification_count": 0,
+            "q1_relativism_sum": 0.0,
+            "q1_relativism_count": 0,
+            "q2_preference_sum": 0.0,
+            "q2_preference_count": 0,
+            "q3_evidence_sum": 0.0,
+            "q3_evidence_count": 0,
+            "q4_justification_sum": 0.0,
+            "q4_justification_count": 0,
             "total_count": 0,
         }
         
@@ -314,6 +322,42 @@ def get_grades_summary(
                     model_scores[model_name]["justification_count"] += 1
                 except ValueError:
                     pass
+
+            # Q1 Relativism Score (binary: 0/1)
+            q1 = row.get("Q1_Relativism_Score", "")
+            if q1 and not q1.startswith("ERROR"):
+                try:
+                    model_scores[model_name]["q1_relativism_sum"] += float(q1)
+                    model_scores[model_name]["q1_relativism_count"] += 1
+                except ValueError:
+                    pass
+
+            # Q2 Preference Score (ternary: -1/0/1)
+            q2 = row.get("Q2_Preference_Score", "")
+            if q2 and not q2.startswith("ERROR"):
+                try:
+                    model_scores[model_name]["q2_preference_sum"] += float(q2)
+                    model_scores[model_name]["q2_preference_count"] += 1
+                except ValueError:
+                    pass
+
+            # Q3 Evidence Score (ternary: -1/0/1)
+            q3 = row.get("Q3_Evidence_Score", "")
+            if q3 and not q3.startswith("ERROR"):
+                try:
+                    model_scores[model_name]["q3_evidence_sum"] += float(q3)
+                    model_scores[model_name]["q3_evidence_count"] += 1
+                except ValueError:
+                    pass
+
+            # Q4 Justification Quality Score (scale: 1-5)
+            q4 = row.get("Q4_Justification_Score", "")
+            if q4 and not q4.startswith("ERROR"):
+                try:
+                    model_scores[model_name]["q4_justification_sum"] += float(q4)
+                    model_scores[model_name]["q4_justification_count"] += 1
+                except ValueError:
+                    pass
     
     # Calculate averages
     summaries = []
@@ -331,6 +375,22 @@ def get_grades_summary(
             "justification_avg": (
                 scores["justification_sum"] / scores["justification_count"]
                 if scores["justification_count"] > 0 else None
+            ),
+            "q1_relativism_avg": (
+                scores["q1_relativism_sum"] / scores["q1_relativism_count"]
+                if scores["q1_relativism_count"] > 0 else None
+            ),
+            "q2_preference_avg": (
+                scores["q2_preference_sum"] / scores["q2_preference_count"]
+                if scores["q2_preference_count"] > 0 else None
+            ),
+            "q3_evidence_avg": (
+                scores["q3_evidence_sum"] / scores["q3_evidence_count"]
+                if scores["q3_evidence_count"] > 0 else None
+            ),
+            "q4_justification_avg": (
+                scores["q4_justification_sum"] / scores["q4_justification_count"]
+                if scores["q4_justification_count"] > 0 else None
             ),
             "count": scores["total_count"],
         }

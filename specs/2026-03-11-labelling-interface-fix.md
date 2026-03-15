@@ -1,0 +1,6 @@
+- So the modifier keys should be changed. Don't use function keys, use better keys.
+- Make sure key for previous is to the left and key for next is to the right of each other. Right now they are reversed.
+- Include buttons to go to next response and previous response.
+- The little buttons on the top displaying which ones have been annotated should allow clicking on them
+- Save selected model state somewhere, or save application state somewhere so we can resume where we left off.
+- Include a back button for selecting a different model to annoate.

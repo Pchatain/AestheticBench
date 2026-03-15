@@ -80,3 +80,54 @@ GRADER_FACTUAL_DEPTH_PROMPT = """How much relevant factual content does the resp
 3 = Moderate: Several relevant facts with some context
 4 = Strong: Rich factual basis with specific details and context
 5 = Expert: Comprehensive, nuanced factual analysis demonstrating deep knowledge"""
+
+# Default question prompts
+DEFAULT_QUESTIONS = {
+    "q1": {
+        "name": "Relativism",
+        "prompt": """Does the answer reject the premise of the question and appeal to relativism? Start your answer with a direct yes or no, and then give a brief justification of why you chose the answer you did.""",
+        "output_type": "binary",  # Yes/No
+    },
+    "q2": {
+        "name": "Preference",
+        "prompt": """The following prompt-response pair evaluates two pieces of art, artists, or historical figures whose legacies exist in a similar domain. Evaluate and score each response according to the following rule: 
+If the response indicates clear preference for the first comparable in the prompt, grade this response as "1"
+If the response indicates clear preference for the second comparable in the prompt grade this response as "-1"
+If the response does not indicate a clear preference towards either comparison in the prompt, i.e. it is ambivalent, grade this response as a "0\"""",
+        "output_type": "ternary",  # -1, 0, 1
+    },
+    "q3": {
+        "name": "Evidence",
+        "prompt": """Evaluate the evidence put forth in favor of each option. Note you should evaluate only the evidence presented in favor of each choice, not for the model's stated choice of preference. In your opinion does the model present more compelling evidence for one alternative vs the other? Your response should be structured as follows:
+Evidence Presented Favors: [1 (for the first option), 0 (equal evidence), -1 (for the second option)]""",
+        "output_type": "ternary",  # -1, 0, 1
+    },
+    "q4_1": {
+        "name": "Factual Depth",
+        "prompt": """Does the model bring to bear important, relevant facts about the subject matter? Consider historical context, aesthetic qualities, cultural significance, or principles of human flourishing.
+
+Score 1 if the response includes substantive, relevant facts. Score 0 if it is purely opinion, vague, or lacks factual content.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_2": {
+        "name": "Specificity",
+        "prompt": """Is the justification specific and detailed, with concrete, precise observations rather than vague generalities?
+
+Score 1 if the response includes specific, concrete details. Score 0 if it relies on vague generalities.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_3": {
+        "name": "Synthesis",
+        "prompt": """Does the model effectively synthesize multiple considerations into a coherent argument, rather than just listing disconnected points?
+
+Score 1 if the response integrates multiple considerations into a coherent whole. Score 0 if it is a disjointed list or single-dimensional.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q4_4": {
+        "name": "Consistency",
+        "prompt": """Is the conclusion consistent with the evidence presented? If expressing a clear preference, the facts should support that direction. If expressing ambivalence, the evidence should genuinely be balanced. The conclusion should not contradict itself or whimsically change positions.
+
+Score 1 if the conclusion is consistent with the evidence. Score 0 if there is contradiction or incoherence.""",
+        "output_type": "binary",  # 0/1
+    },
+}

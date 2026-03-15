@@ -24,6 +24,11 @@ import type {
   PlaygroundResponse,
   PromptResult,
   PromptsFilesResponse,
+  Q1Q4AnnotationCreate,
+  Q1Q4AnnotationLookupResponse,
+  Q1Q4AnnotationSaveResponse,
+  Q1Q4ModelsResponse,
+  Q1Q4ResponsesResponse,
   ResultsResponse,
   SaveExperimentResponse,
   SaveMultiExperimentRequest,
@@ -356,5 +361,44 @@ export async function saveMultiExperimentResults(request: SaveMultiExperimentReq
     const error = await res.json()
     throw new Error(error.detail || 'Failed to save experiment')
   }
+  return res.json()
+}
+
+// === Q1-Q4 Annotation API ===
+
+export async function fetchQ1Q4Responses(params?: {
+  model?: string
+  limit?: number
+  offset?: number
+}): Promise<Q1Q4ResponsesResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.model) searchParams.set('model', params.model)
+  if (params?.limit !== undefined) searchParams.set('limit', String(params.limit))
+  if (params?.offset !== undefined) searchParams.set('offset', String(params.offset))
+  const res = await fetch(`${API_BASE}/annotations/q1q4?${searchParams}`)
+  return res.json()
+}
+
+export async function lookupQ1Q4Annotation(response_id: number, model: string): Promise<Q1Q4AnnotationLookupResponse> {
+  const params = new URLSearchParams({ response_id: String(response_id), model })
+  const res = await fetch(`${API_BASE}/annotations/q1q4/lookup?${params}`)
+  return res.json()
+}
+
+export async function saveQ1Q4Annotation(data: Q1Q4AnnotationCreate): Promise<Q1Q4AnnotationSaveResponse> {
+  const res = await fetch(`${API_BASE}/annotations/q1q4`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.detail || 'Failed to save Q1-Q4 annotation')
+  }
+  return res.json()
+}
+
+export async function fetchQ1Q4Models(): Promise<Q1Q4ModelsResponse> {
+  const res = await fetch(`${API_BASE}/annotations/q1q4/models`)
   return res.json()
 }

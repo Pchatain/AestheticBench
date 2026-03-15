@@ -125,6 +125,19 @@ MORALBENCH_WORKERS=0 uv run --env-file .env python main.py
 
 After running inference, you can grade the model responses using an LLM-as-judge approach.
 
+### Grading Dimensions (Q1–Q4)
+
+Each model response is evaluated on four dimensions:
+
+- **Q1 — Relativism** (Yes/No): Does the response reject the comparison premise by appealing to relativism (e.g., "it's all subjective")?
+- **Q2 — Preference** (-1, 0, 1): Does the response express a clear preference? 1 = favors the first option, -1 = favors the second, 0 = ambivalent.
+- **Q3 — Evidence** (-1, 0, 1): Which side does the evidence presented in the response favor? Note: this treats evidence as an unstated condition — we are not asking the model to explicitly present evidence, but rather inferring which side the evidence in its reply supports.
+- **Q4 — Justification Quality** (1–5): Overall quality of the response's justification on a 1-5 scale.
+- **Q4.1 — Factual Depth** (0/1): Does the response bring important, relevant facts to bear — historical context, aesthetic qualities, cultural significance?
+- **Q4.2 — Specificity** (0/1): Are the claims concrete and precise, with specific details rather than vague generalities?
+- **Q4.3 — Synthesis** (0/1): Does the response assemble its facts into a coherent argument, rather than listing disconnected points?
+- **Q4.4 — Consistency** (0/1): Does the conclusion follow from the evidence? The response should not contradict itself or maintain a position that its own evidence undermines.
+
 ### Available Graders
 
 - **preference1** - Categorical preference scoring (-1, 0, 1)
@@ -154,11 +167,19 @@ Grading results are saved to `results/<version>/grades/` with additional score c
 This folder is now located in `packages/backend/data/results/...`. That is where all the data lives
 such that the backend can serve the data to the frontend.
 
-# Roadmap
+droid --resume 062472a3-1274-4b8a-8393-bc03261ffa07
+droid --resume c1c71fd4-20e4-447c-bb7d-8010309e7993
+droid --resume ff4f813d-4ec6-4614-a54e-2547191e06d9
+
+# Research Roadmap
 - [x] Create a visualization server to analyze results
 - [x] Create an LLM as judge to classify and sort replies
     - [x] Update the grades to include reasoning for the grade assigned.
     - [x] Update UI to display the reasoning for the grade assigned.
+- [ ] Update prompts to be formatted with A,B placeholders so we can swap order of comparisons.
+- [ ] Create a handful more questions
+- [ ] Label question responses for select 5 models, get LLM judge agreement.
+- [ ] Run at scale and get statistical significance estimates for the questions across selected models.
 
 ## Infra TODOs
 - [x] Cleanup architecture - consolidated all code under `packages/backend`
@@ -168,7 +189,8 @@ such that the backend can serve the data to the frontend.
     claude code modules I can download that should help with this. Use shadcn/ui for the components.
         - We don't want to just re-design the analysis UI. The major engineering here would be around
         putting this together into a distributed web page showing the results of the benchmark.
-- [ ] Add testing framework
+- [x] Add retry logic on failed or errored responses to ensure we get responses.
+- [x] Add testing framework
 - [ ] Setup CI/CD to distribute this as a package so people (or just us) can run the benchmark easily.
 - [ ] Claim a domain name
 - [ ] Set up web hosting for the benchmark.

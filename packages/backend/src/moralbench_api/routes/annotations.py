@@ -1,4 +1,4 @@
-"""Annotations API routes with file-based storage."""
+"""Annotations API routes with file-based storage and database storage for Q1-Q4."""
 
 import json
 import uuid
@@ -9,10 +9,15 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from moral_bench.database import MoralBenchDB
+
 router = APIRouter()
 
 DATA_DIR = Path(__file__).parents[3] / "data"
 ANNOTATIONS_FILE = DATA_DIR / "annotations.json"
+
+# Database path - use the main moralbench.db
+DB_PATH = Path(__file__).parents[5] / "moralbench.db"
 
 
 class AnnotationCreate(BaseModel):
@@ -108,6 +113,184 @@ def lookup_annotation(
         if ann["result_uid"] == result_uid and ann["model"] == model:
             return {"annotation": ann, "found": True}
     return {"annotation": None, "found": False}
+
+
+# ============ Q1-Q4 Database-based Annotations ============
+# NOTE: These routes MUST be defined BEFORE the /annotations/{annotation_id} route
+# because FastAPI matches routes in order and {annotation_id} would match "q1q4"
+
+class Q1Q4AnnotationCreate(BaseModel):
+    """Create/update Q1-Q4 annotation request."""
+    response_id: int = Field(..., description="Database response ID")
+    model: str = Field(..., description="Model name")
+    q1_score: Optional[str] = Field(None, description="Q1 score: Yes or No")
+    q1_reasoning: Optional[str] = Field(None, description="Q1 reasoning")
+    q2_score: Optional[int] = Field(None, ge=-1, le=1, description="Q2 score: -1, 0, or 1")
+    q2_reasoning: Optional[str] = Field(None, description="Q2 reasoning")
+    q3_score: Optional[int] = Field(None, ge=-1, le=1, description="Q3 score: -1, 0, or 1")
+    q3_reasoning: Optional[str] = Field(None, description="Q3 reasoning")
+    q4_score: Optional[int] = Field(None, ge=1, le=5, description="Q4 score: 1-5")
+    q4_reasoning: Optional[str] = Field(None, description="Q4 reasoning")
+
+
+class Q1Q4AnnotationResponse(BaseModel):
+    """Q1-Q4 annotation response model."""
+    id: Optional[str] = None
+    response_id: int
+    model: str
+    q1_score: Optional[str] = None
+    q1_reasoning: Optional[str] = None
+    q2_score: Optional[int] = None
+    q2_reasoning: Optional[str] = None
+    q3_score: Optional[int] = None
+    q3_reasoning: Optional[str] = None
+    q4_score: Optional[int] = None
+    q4_reasoning: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ResponseWithQ1Q4(BaseModel):
+    """Response with Q1-Q4 LLM grades and human annotations."""
+    response_id: int
+    model: str
+    response_text: str
+    question_id: int
+    topic: str
+    question_text: str
+    # LLM grades
+    llm_q1_score: Optional[str] = None
+    llm_q1_reasoning: Optional[str] = None
+    llm_q2_score: Optional[str] = None
+    llm_q2_reasoning: Optional[str] = None
+    llm_q3_score: Optional[str] = None
+    llm_q3_reasoning: Optional[str] = None
+    llm_q4_score: Optional[str] = None
+    llm_q4_reasoning: Optional[str] = None
+    # Human annotations
+    annotation_id: Optional[str] = None
+    human_q1_score: Optional[str] = None
+    human_q1_reasoning: Optional[str] = None
+    human_q2_score: Optional[int] = None
+    human_q2_reasoning: Optional[str] = None
+    human_q3_score: Optional[int] = None
+    human_q3_reasoning: Optional[str] = None
+    human_q4_score: Optional[int] = None
+    human_q4_reasoning: Optional[str] = None
+
+
+def _get_db() -> MoralBenchDB:
+    """Get database connection."""
+    return MoralBenchDB(DB_PATH)
+
+
+@router.get("/annotations/q1q4")
+def list_q1q4_responses(
+    model: Optional[str] = Query(None, description="Filter by model name"),
+    limit: int = Query(100, ge=1, le=500, description="Number of results to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+):
+    """List responses with their Q1-Q4 LLM grades and human annotations."""
+    db = _get_db()
+    responses = db.get_responses_for_q1q4_annotation(model=model, limit=limit, offset=offset)
+    return {"responses": responses, "total": len(responses)}
+
+
+@router.get("/annotations/q1q4/lookup")
+def lookup_q1q4_annotation(
+    response_id: int = Query(..., description="Response ID"),
+    model: str = Query(..., description="Model name"),
+):
+    """Look up Q1-Q4 annotation by response_id and model."""
+    db = _get_db()
+    annotation = db.get_annotation_by_response_id(response_id, model)
+    if annotation:
+        return {
+            "annotation": {
+                "id": annotation.id,
+                "response_id": annotation.response_id,
+                "model": annotation.model,
+                "q1_score": annotation.q1_score,
+                "q1_reasoning": annotation.q1_reasoning,
+                "q2_score": annotation.q2_score,
+                "q2_reasoning": annotation.q2_reasoning,
+                "q3_score": annotation.q3_score,
+                "q3_reasoning": annotation.q3_reasoning,
+                "q4_score": annotation.q4_score,
+                "q4_reasoning": annotation.q4_reasoning,
+                "created_at": str(annotation.created_at) if annotation.created_at else None,
+                "updated_at": str(annotation.updated_at) if annotation.updated_at else None,
+            },
+            "found": True,
+        }
+    return {"annotation": None, "found": False}
+
+
+@router.post("/annotations/q1q4")
+def save_q1q4_annotation(data: Q1Q4AnnotationCreate):
+    """Create or update a Q1-Q4 annotation in the database."""
+    db = _get_db()
+    
+    # Check if annotation already exists
+    existing = db.get_annotation_by_response_id(data.response_id, data.model)
+    now = datetime.utcnow()
+    
+    if existing:
+        # Update existing annotation - preserve other fields
+        annotation_id = existing.id
+        created_at = existing.created_at
+    else:
+        annotation_id = str(uuid.uuid4())
+        created_at = now
+    
+    # Save the annotation
+    db.add_annotation(
+        annotation_id=annotation_id,
+        response_id=data.response_id,
+        model=data.model,
+        notes=existing.notes if existing else None,
+        preference_reasoning=existing.preference_reasoning if existing else None,
+        preference_score=existing.preference_score if existing else None,
+        justification_reasoning=existing.justification_reasoning if existing else None,
+        justification_score=existing.justification_score if existing else None,
+        q1_score=data.q1_score,
+        q1_reasoning=data.q1_reasoning,
+        q2_score=data.q2_score,
+        q2_reasoning=data.q2_reasoning,
+        q3_score=data.q3_score,
+        q3_reasoning=data.q3_reasoning,
+        q4_score=data.q4_score,
+        q4_reasoning=data.q4_reasoning,
+        created_at=created_at,
+        updated_at=now,
+    )
+    
+    return {
+        "annotation": {
+            "id": annotation_id,
+            "response_id": data.response_id,
+            "model": data.model,
+            "q1_score": data.q1_score,
+            "q1_reasoning": data.q1_reasoning,
+            "q2_score": data.q2_score,
+            "q2_reasoning": data.q2_reasoning,
+            "q3_score": data.q3_score,
+            "q3_reasoning": data.q3_reasoning,
+            "q4_score": data.q4_score,
+            "q4_reasoning": data.q4_reasoning,
+            "created_at": str(created_at),
+            "updated_at": str(now),
+        },
+        "created": existing is None,
+    }
+
+
+@router.get("/annotations/q1q4/models")
+def get_models_for_q1q4():
+    """Get list of models that have responses in the database."""
+    db = _get_db()
+    models = db.get_models()
+    return {"models": models}
 
 
 @router.get("/annotations/{annotation_id}")

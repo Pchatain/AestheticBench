@@ -7,6 +7,7 @@ import { Analytics } from './components/Analytics'
 import { PlaygroundSidebar } from './components/Playground'
 import { GraderPrompts } from './components/GraderPrompts'
 import { Annotator } from './components/Annotator'
+import { Q1Q4Annotator } from './components/Q1Q4Annotator'
 import { CommandCenter } from './components/CommandCenter'
 import { JustificationExperiment } from './components/JustificationExperiment'
 import { fetchModels, fetchTopics, fetchResults, fetchHeaders } from './api'
@@ -75,6 +76,7 @@ function App() {
         )}
         {currentPage === 'command-center' && <CommandCenter />}
         {currentPage === 'annotator' && <Annotator />}
+        {currentPage === 'q1q4-annotator' && <Q1Q4Annotator />}
         {currentPage === 'comparison' && <ModelComparison />}
         {currentPage === 'analytics' && <Analytics />}
         {currentPage === 'experiment' && <JustificationExperiment />}

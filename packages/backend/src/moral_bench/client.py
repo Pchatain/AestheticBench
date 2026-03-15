@@ -228,25 +228,6 @@ class OpenRouterClient:
         current_workers = max_workers
         backoff_until = 0.0
 
-        # Sequential mode when max_workers is 0
-        if max_workers == 0:
-            for i, message in tqdm(
-                enumerate(messages),
-                total=len(messages),
-                desc="Processing prompts",
-                unit="prompt",
-                leave=True,
-            ):
-                try:
-                    response = self.chat_completion(message, model)
-                    results.append((i, message, response))
-                    stats.completed += 1
-                except Exception as e:
-                    tqdm.write(f"  ✗ Error: {e}")
-                    results.append((i, message, None))
-                    stats.failed += 1
-            return results
-
         def process_with_retry(index: int, message: str) -> tuple[int, str, Optional[str]]:
             """Process a single message with retries and exponential backoff."""
             nonlocal current_workers, backoff_until
@@ -308,11 +289,40 @@ class OpenRouterClient:
                     tqdm.write(f"  ✗ Timeout for message {index} after {max_retries} retries")
                     return (index, message, None)
                     
+                except httpx.HTTPError as e:
+                    # Connection errors - retry
+                    if attempt < max_retries:
+                        stats.retries += 1
+                        sleep_time = backoff * (2 ** attempt) + random.uniform(0, 1)
+                        sleep_time = min(sleep_time, self.config.max_backoff)
+                        tqdm.write(f"  ⏳ Connection error for {index}, retrying in {sleep_time:.1f}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(sleep_time)
+                        continue
+                    tqdm.write(f"  ✗ Connection error for message {index} after {max_retries} retries: {e}")
+                    return (index, message, None)
+                    
                 except Exception as e:
-                    tqdm.write(f"  ✗ Error processing message {index}: {e}")
+                    tqdm.write(f"  ✗ Unexpected error processing message {index}: {e}")
                     return (index, message, None)
             
             return (index, message, None)
+
+        # Sequential mode when max_workers is 0
+        if max_workers == 0:
+            for i, message in tqdm(
+                enumerate(messages),
+                total=len(messages),
+                desc="Processing prompts",
+                unit="prompt",
+                leave=True,
+            ):
+                result = process_with_retry(i, message)
+                results.append(result)
+                if result[2] is not None:
+                    stats.completed += 1
+                else:
+                    stats.failed += 1
+            return results
 
         # Parallel mode with ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

@@ -7,6 +7,10 @@
 # Results directory
 results/
 
+# Application state
+.annotator_state.json
+moralbench.db
+
 # AI Coding Tools
 .claude
 

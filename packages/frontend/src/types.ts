@@ -29,6 +29,10 @@ export interface GradesSummary {
   preference1_avg: number | null
   preference2_avg: number | null
   justification_avg: number | null
+  q1_relativism_avg?: number | null
+  q2_preference_avg?: number | null
+  q3_evidence_avg?: number | null
+  q4_justification_avg?: number | null
   count: number
 }
 
@@ -332,4 +336,82 @@ export interface SaveMultiExperimentRequest {
 export interface SaveExperimentResponse {
   filepath: string
   saved: boolean
+}
+
+// === Q1-Q4 Annotation Types ===
+
+export interface Q1Q4Annotation {
+  id: string | null
+  response_id: number
+  model: string
+  q1_score: string | null  // Yes/No
+  q1_reasoning: string | null
+  q2_score: number | null  // -1, 0, 1
+  q2_reasoning: string | null
+  q3_score: number | null  // -1, 0, 1
+  q3_reasoning: string | null
+  q4_score: number | null  // 1-5
+  q4_reasoning: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface Q1Q4AnnotationCreate {
+  response_id: number
+  model: string
+  q1_score: string | null
+  q1_reasoning: string | null
+  q2_score: number | null
+  q2_reasoning: string | null
+  q3_score: number | null
+  q3_reasoning: string | null
+  q4_score: number | null
+  q4_reasoning: string | null
+}
+
+export interface ResponseWithQ1Q4 {
+  response_id: number
+  model: string
+  response_text: string
+  question_id: number
+  topic: string
+  question_text: string
+  // LLM grades
+  llm_q1_score: string | null
+  llm_q1_reasoning: string | null
+  llm_q2_score: string | null
+  llm_q2_reasoning: string | null
+  llm_q3_score: string | null
+  llm_q3_reasoning: string | null
+  llm_q4_score: string | null
+  llm_q4_reasoning: string | null
+  // Human annotations
+  annotation_id: string | null
+  human_q1_score: string | null
+  human_q1_reasoning: string | null
+  human_q2_score: number | null
+  human_q2_reasoning: string | null
+  human_q3_score: number | null
+  human_q3_reasoning: string | null
+  human_q4_score: number | null
+  human_q4_reasoning: string | null
+}
+
+export interface Q1Q4ResponsesResponse {
+  responses: ResponseWithQ1Q4[]
+  total: number
+}
+
+export interface Q1Q4AnnotationLookupResponse {
+  annotation: Q1Q4Annotation | null
+  found: boolean
+}
+
+export interface Q1Q4AnnotationSaveResponse {
+  annotation: Q1Q4Annotation
+  created: boolean
+}
+
+export interface Q1Q4ModelsResponse {
+  models: string[]
 }
