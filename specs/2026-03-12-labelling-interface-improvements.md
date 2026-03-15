@@ -1,0 +1,3 @@
+- Move various UI elements so that more text is visible. For exmaple, the buttons for next and previous and the various labels to write for a sample should be moved to be side by side with annotation input fields rather than eating into 
+- Q1, Q4.1, Q4.2, Q3, Q4.3, Q2, Q4.4, Q4.
+- save upon entering a number rather than waiting for save or next annotation.
