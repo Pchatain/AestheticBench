@@ -10,8 +10,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from .text_utils import strip_entity_brackets
-
 
 class Question(BaseModel):
     """A benchmark question."""
@@ -216,7 +214,7 @@ class MoralBenchDB:
             for row in reader:
                 total += 1
                 topic = row.get("Topic", "")
-                question = strip_entity_brackets(row.get("Question", ""))
+                question = row.get("Question", "")
                 if question:
                     with self._connect() as conn:
                         cursor = conn.execute(

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from moral_bench import OpenRouterClient
 from moral_bench.processor import CSVReader
-from moral_bench.text_utils import strip_entity_brackets
 
 
 @dataclass
@@ -92,7 +91,7 @@ class EstimationService:
         prompts_count = len(prompts)
 
         # Calculate token estimates
-        total_chars = sum(len(strip_entity_brackets(prompt.get("Question", ""))) for prompt in prompts)
+        total_chars = sum(len(prompt.get("Question", "")) for prompt in prompts)
         total_input_tokens = self.estimate_tokens(total_chars)
 
         estimate = DryRunEstimate(

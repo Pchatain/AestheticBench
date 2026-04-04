@@ -6,7 +6,6 @@ from .database import MoralBenchDB, Question, Response, Grade
 from .grading import GradingProcessor, Grader, GraderRegistry
 from .grader_prompts import DEFAULT_QUESTIONS
 from .processor import CSVReader, PromptProcessor, ResultWriter
-from .text_utils import strip_entity_brackets
 
 __version__ = "0.1.0"
 
@@ -24,5 +23,4 @@ __all__ = [
     "Grader",
     "GraderRegistry",
     "DEFAULT_QUESTIONS",
-    "strip_entity_brackets",
 ]

@@ -6,7 +6,6 @@ from pathlib import Path
 from tqdm import tqdm
 
 from .client import OpenRouterClient
-from .text_utils import strip_entity_brackets, swap_entities
 
 
 class CSVReader:
@@ -125,9 +124,8 @@ class PromptProcessor:
         prompts = CSVReader.read_prompts(prompts_file)
         print(f"Found {len(prompts)} prompts to process")
 
-        # Prepare messages for batch processing (strip entity brackets for model input)
-        raw_questions = [prompt.get("Question", "") for prompt in prompts]
-        messages = [strip_entity_brackets(q) for q in raw_questions]
+        # Prepare messages for batch processing
+        messages = [prompt.get("Question", "") for prompt in prompts]
 
         print(
             f"Output will be saved to: {output_dir / model.replace('/', '_')}_<timestamp>.csv"
@@ -153,7 +151,7 @@ class PromptProcessor:
             results.append(
                 {
                     "Topic": topic,
-                    "Question": messages[idx],
+                    "Question": message,
                     "Model Response": model_response,
                     "Timestamp": datetime.now().isoformat(),
                 }

@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from moral_bench.grader_prompts import DEFAULT_QUESTIONS
 
-
 from ._shared import (
     GRADES_DIR,
     RESULTS_DIR,
@@ -185,11 +184,6 @@ async def grade_single_question(
     
     Returns: (score, grader_response, error)
     """
-    if "[" in original_question:
-        raise ValueError(
-            f"Question contains [entity] brackets — it should have been "
-            f"cleaned before storage: {original_question!r}"
-        )
     full_prompt = f"""{question_prompt}
 
 PROMPT: {original_question}
