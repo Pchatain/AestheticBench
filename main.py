@@ -1013,8 +1013,9 @@ def db_grade(
             error_count = 0
             for idx, message, grader_response in tqdm(batch_results, desc=f"  {grader_id}"):
                 response_id = prompts[idx][0]
+                grading_prompt = prompts[idx][1]
                 response, question = ungraded[idx]
-                
+
                 if grader_response is None:
                     error_count += 1
                     continue
@@ -1026,10 +1027,12 @@ def db_grade(
                 )
 
                 if success:
-                    db.add_grade(response_id, grader_id, str(score), reasoning, grader_version)
+                    db.add_grade(response_id, grader_id, str(score), reasoning, grader_version,
+                                 grader_model=grader_model, grader_prompt=grading_prompt)
                     success_count += 1
                 else:
-                    db.add_grade(response_id, grader_id, error_msg, "", grader_version)
+                    db.add_grade(response_id, grader_id, error_msg, "", grader_version,
+                                 grader_model=grader_model, grader_prompt=grading_prompt)
                     error_count += 1
 
             print(f"  ✓ {grader_id}: Success: {success_count}, Errors: {error_count}")

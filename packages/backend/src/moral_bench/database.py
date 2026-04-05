@@ -37,6 +37,8 @@ class Grade(BaseModel):
     response_id: int
     grader_id: str
     grader_version: Optional[str] = None
+    grader_model: Optional[str] = None
+    grader_prompt: Optional[str] = None
     score: str
     reasoning: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -100,6 +102,8 @@ class MoralBenchDB:
         response_id INTEGER REFERENCES responses(id),
         grader_id TEXT NOT NULL,
         grader_version TEXT,
+        grader_model TEXT,
+        grader_prompt TEXT,
         score TEXT NOT NULL,
         reasoning TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -168,6 +172,8 @@ class MoralBenchDB:
             "ALTER TABLE annotations ADD COLUMN q4_3_reasoning TEXT",
             "ALTER TABLE annotations ADD COLUMN q4_4_score INTEGER",
             "ALTER TABLE annotations ADD COLUMN q4_4_reasoning TEXT",
+            "ALTER TABLE grades ADD COLUMN grader_model TEXT",
+            "ALTER TABLE grades ADD COLUMN grader_prompt TEXT",
         ]
         with self._connect() as conn:
             for sql in new_columns:
@@ -366,14 +372,16 @@ class MoralBenchDB:
         score: str,
         reasoning: Optional[str] = None,
         grader_version: Optional[str] = None,
+        grader_model: Optional[str] = None,
+        grader_prompt: Optional[str] = None,
     ) -> int:
         """Add a grade for a response."""
         with self._connect() as conn:
             cursor = conn.execute(
-                """INSERT OR REPLACE INTO grades 
-                   (response_id, grader_id, grader_version, score, reasoning, created_at) 
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (response_id, grader_id, grader_version, score, reasoning, datetime.now()),
+                """INSERT OR REPLACE INTO grades
+                   (response_id, grader_id, grader_version, grader_model, grader_prompt, score, reasoning, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (response_id, grader_id, grader_version, grader_model, grader_prompt, score, reasoning, datetime.now()),
             )
             return cursor.lastrowid
 
