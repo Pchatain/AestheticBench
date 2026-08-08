@@ -935,6 +935,10 @@ def db_grade(
         str,
         typer.Option("--model", help="Only grade responses from this model"),
     ] = None,
+    annotated_only: Annotated[
+        bool,
+        typer.Option("--annotated-only", help="Only grade responses that have a human annotation"),
+    ] = False,
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
@@ -962,11 +966,13 @@ def db_grade(
     print(f"Grader version: {grader_version}")
     if model_filter:
         print(f"Filtering to model: {model_filter}")
+    if annotated_only:
+        print("Filtering to human-annotated responses only")
 
     # Count ungraded for each grader
     total_to_grade = 0
     for grader_id in grader_ids:
-        ungraded = db.get_ungraded_responses(grader_id, model=model_filter)
+        ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only)
         print(f"  {grader_id}: {len(ungraded)} ungraded responses")
         total_to_grade += len(ungraded)
 
@@ -991,7 +997,7 @@ def db_grade(
 
         for grader_id in grader_ids:
             grader = GraderRegistry.get_grader(grader_id)
-            ungraded = db.get_ungraded_responses(grader_id, model=model_filter)
+            ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only)
             
             if not ungraded:
                 print(f"\n✓ {grader_id}: No responses to grade")

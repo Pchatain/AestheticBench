@@ -389,14 +389,24 @@ class MoralBenchDB:
         self,
         grader_id: str,
         model: Optional[str] = None,
+        annotated_only: bool = False,
     ) -> list[tuple[Response, Question]]:
-        """Get responses that haven't been graded by the specified grader."""
+        """Get responses that haven't been graded by the specified grader.
+
+        Set annotated_only to restrict to responses that carry a human annotation,
+        which is what human/judge agreement analysis needs.
+        """
         conditions = ["NOT EXISTS (SELECT 1 FROM grades g WHERE g.response_id = r.id AND g.grader_id = ?)"]
         params = [grader_id]
-        
+
         if model:
             conditions.append("r.model = ?")
             params.append(model)
+
+        if annotated_only:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM annotations a WHERE a.response_id = r.id AND a.model = r.model)"
+            )
 
         where_clause = " AND ".join(conditions)
         
@@ -556,32 +566,64 @@ class MoralBenchDB:
             )
             return [Annotation(**dict(row)) for row in cursor.fetchall()]
 
-    def get_annotations_with_grades(self) -> list[dict]:
-        """Get annotations joined with their corresponding grades for agreement analysis."""
+    def get_annotations_with_grades(self, valid_only: bool = False) -> list[dict]:
+        """Get annotations joined with their corresponding grades for agreement analysis.
+
+        Set valid_only to drop annotations whose response_id points at a different
+        model's response. The pre-Q1-Q4 annotations were imported with
+        response_id = result_uid, which was a per-question index rather than a
+        response id, so their joins land on unrelated responses.
+        """
+        where = (
+            "WHERE a.model = r.model"
+            if valid_only
+            else "WHERE a.preference_score IS NOT NULL OR a.justification_score IS NOT NULL"
+            " OR a.q1_score IS NOT NULL OR a.q2_score IS NOT NULL"
+            " OR a.q3_score IS NOT NULL OR a.q4_score IS NOT NULL"
+        )
         with self._connect() as conn:
             cursor = conn.execute(
-                """SELECT 
+                f"""SELECT
                        a.id as annotation_id,
                        a.response_id,
                        a.model,
+                       a.annotator,
+                       a.created_at,
                        a.preference_score as human_preference,
                        a.justification_score as human_justification,
+                       a.q1_score as human_q1,
+                       a.q2_score as human_q2,
+                       a.q3_score as human_q3,
+                       a.q4_score as human_q4,
+                       a.q4_1_score as human_q4_1,
+                       a.q4_2_score as human_q4_2,
+                       a.q4_3_score as human_q4_3,
+                       a.q4_4_score as human_q4_4,
                        g_q1.score as q1_score,
                        g_q2.score as q2_score,
                        g_q3.score as q3_score,
                        g_q4.score as q4_score,
+                       g_q4_1.score as q4_1_score,
+                       g_q4_2.score as q4_2_score,
+                       g_q4_3.score as q4_3_score,
+                       g_q4_4.score as q4_4_score,
                        g_pref1.score as preference1_score,
                        g_pref2.score as preference2_score,
                        g_just.score as justification_auto_score
                    FROM annotations a
+                   JOIN responses r ON a.response_id = r.id
                    LEFT JOIN grades g_q1 ON a.response_id = g_q1.response_id AND g_q1.grader_id = 'q1'
                    LEFT JOIN grades g_q2 ON a.response_id = g_q2.response_id AND g_q2.grader_id = 'q2'
                    LEFT JOIN grades g_q3 ON a.response_id = g_q3.response_id AND g_q3.grader_id = 'q3'
                    LEFT JOIN grades g_q4 ON a.response_id = g_q4.response_id AND g_q4.grader_id = 'q4'
+                   LEFT JOIN grades g_q4_1 ON a.response_id = g_q4_1.response_id AND g_q4_1.grader_id = 'q4_1'
+                   LEFT JOIN grades g_q4_2 ON a.response_id = g_q4_2.response_id AND g_q4_2.grader_id = 'q4_2'
+                   LEFT JOIN grades g_q4_3 ON a.response_id = g_q4_3.response_id AND g_q4_3.grader_id = 'q4_3'
+                   LEFT JOIN grades g_q4_4 ON a.response_id = g_q4_4.response_id AND g_q4_4.grader_id = 'q4_4'
                    LEFT JOIN grades g_pref1 ON a.response_id = g_pref1.response_id AND g_pref1.grader_id = 'preference1'
                    LEFT JOIN grades g_pref2 ON a.response_id = g_pref2.response_id AND g_pref2.grader_id = 'preference2'
                    LEFT JOIN grades g_just ON a.response_id = g_just.response_id AND g_just.grader_id = 'justification'
-                   WHERE a.preference_score IS NOT NULL OR a.justification_score IS NOT NULL
+                   {where}
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
