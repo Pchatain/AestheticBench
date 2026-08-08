@@ -1,5 +1,17 @@
 always use uv instead of python or pip.
 
+## API Keys / Environment
+
+`OPENROUTER_API_KEY` lives in `.env.local` (gitignored). Nothing in the code calls
+`load_dotenv`, so any command that hits OpenRouter must load it via uv's `--env-file` flag:
+
+```
+uv run --env-file .env.local python main.py db grade ...
+```
+
+Without `--env-file` the command fails at `Config.from_env()`
+(`packages/backend/src/moral_bench/config.py:34`) with "OPENROUTER_API_KEY not found".
+
 ## Git Commits
 
 Never add Co-Authored-By lines to commits. Commits should be authored by the user only.
