@@ -13,8 +13,10 @@ from moral_bench.grading import GradingProcessor, GraderRegistry
 from moral_bench.human_judge_agreement import (
     load_annotations_from_json,
     compute_agreement,
+    compute_q1q4_agreement,
     compute_inter_model_agreement,
     print_agreement_report,
+    print_q1q4_agreement_report,
     create_agreement_plots,
     create_agreement_table,
 )
@@ -1173,9 +1175,16 @@ def db_agreement(
         print(f"\nTotal annotations in database: {len(annotations)}")
         raise typer.Exit(code=0)
 
-    # Compute human-model agreement
+    # Compute human-model agreement on the Q1-Q4 questions
+    q1q4_agreement = compute_q1q4_agreement(db)
+    if q1q4_agreement["total_annotations"] > 0:
+        print_q1q4_agreement_report(q1q4_agreement)
+    else:
+        print("No Q1-Q4 human annotations found.\n")
+
+    # Legacy preference/justification agreement
     human_agreement = compute_agreement(db)
-    
+
     if human_agreement["total_annotations"] > 0:
         print_agreement_report(human_agreement)
     else:
