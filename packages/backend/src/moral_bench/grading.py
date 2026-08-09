@@ -112,16 +112,59 @@ Provide your evaluation as JSON with this exact format:
         Returns:
             Tuple of (reasoning, raw_score) or (None, None) if parsing fails
         """
-        try:
-            json_match = re.search(r'\{[^{}]*"reasoning"[^{}]*"score"[^{}]*\}', grader_response, re.DOTALL)
-            if not json_match:
-                json_match = re.search(r'\{[^{}]*"score"[^{}]*"reasoning"[^{}]*\}', grader_response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                return data.get("reasoning", ""), data.get("score")
-        except (json.JSONDecodeError, AttributeError):
-            pass
-        return None, None
+        if not grader_response:
+            return None, None
+
+        # Grader models wrap the object in ```json fences often enough to matter.
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", grader_response.strip())
+
+        # Strict path: brace-match from the first '{' so reasoning containing
+        # braces doesn't truncate the object, then parse properly.
+        start = text.find("{")
+        if start != -1:
+            depth = 0
+            in_string = False
+            escaped = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif ch == "\\":
+                        escaped = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            data = json.loads(text[start : i + 1])
+                        except json.JSONDecodeError:
+                            break
+                        if isinstance(data, dict) and "score" in data:
+                            return data.get("reasoning", ""), data.get("score")
+                        break
+
+        # Lenient path: pull the fields out directly. This survives invalid JSON
+        # escapes (\'), unescaped quotes inside reasoning, and responses cut off
+        # before the closing brace - all of which json.loads rejects outright.
+        score_match = re.search(r'"score"\s*:\s*"?(-?\d+(?:\.\d+)?|yes|no|true|false)"?', text, re.IGNORECASE)
+        if not score_match:
+            return None, None
+
+        reasoning = ""
+        reasoning_match = re.search(
+            r'"reasoning"\s*:\s*"(.*?)"\s*(?:,\s*"score"|\}\s*$)', text, re.DOTALL | re.IGNORECASE
+        )
+        if reasoning_match:
+            reasoning = reasoning_match.group(1).replace('\\"', '"').replace("\\n", "\n").strip()
+
+        return reasoning, score_match.group(1)
 
     def grade(
         self, question: str, response: str, grader_model_response: str

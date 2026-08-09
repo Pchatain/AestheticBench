@@ -1019,6 +1019,7 @@ def db_grade(
 
             success_count = 0
             error_count = 0
+            failures = []
             for idx, message, grader_response in tqdm(batch_results, desc=f"  {grader_id}"):
                 response_id = prompts[idx][0]
                 grading_prompt = prompts[idx][1]
@@ -1026,6 +1027,7 @@ def db_grade(
 
                 if grader_response is None:
                     error_count += 1
+                    failures.append((response_id, "NO_RESPONSE"))
                     continue
 
                 success, score, reasoning, error_msg = grader.grade(
@@ -1039,11 +1041,19 @@ def db_grade(
                                  grader_model=grader_model, grader_prompt=grading_prompt)
                     success_count += 1
                 else:
-                    db.add_grade(response_id, grader_id, error_msg, "", grader_version,
-                                 grader_model=grader_model, grader_prompt=grading_prompt)
+                    # Deliberately not written to the database. A failure stored as a
+                    # grade both corrupts the score column and makes the response look
+                    # graded, so get_ungraded_responses would skip it on a re-run.
                     error_count += 1
+                    failures.append((response_id, error_msg))
 
             print(f"  ✓ {grader_id}: Success: {success_count}, Errors: {error_count}")
+            if failures:
+                print(f"    {len(failures)} not stored (re-run to retry):")
+                for response_id, error_msg in failures[:5]:
+                    print(f"      response {response_id}: {error_msg[:90]}")
+                if len(failures) > 5:
+                    print(f"      ... and {len(failures) - 5} more")
 
 
 @db_app.command("export")
