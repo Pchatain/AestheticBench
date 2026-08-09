@@ -402,6 +402,7 @@ class MoralBenchDB:
         grader_id: str,
         model: Optional[str] = None,
         annotated_only: bool = False,
+        limit: Optional[int] = None,
     ) -> list[tuple[Response, Question]]:
         """Get responses that haven't been graded by the specified grader.
 
@@ -428,7 +429,8 @@ class MoralBenchDB:
                     FROM responses r 
                     JOIN questions q ON r.question_id = q.id 
                     WHERE {where_clause}
-                    ORDER BY r.id""",
+                    ORDER BY r.id
+                    {"LIMIT " + str(int(limit)) if limit else ""}""",
                 params,
             )
             results = []
