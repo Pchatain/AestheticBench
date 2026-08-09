@@ -950,6 +950,10 @@ def db_grade(
         int,
         typer.Option("--limit", help="Grade at most this many responses per grader (sampling)"),
     ] = None,
+    regrade: Annotated[
+        bool,
+        typer.Option("--regrade", help="Grade responses this grader model has not judged, even if another model has"),
+    ] = False,
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
@@ -983,7 +987,8 @@ def db_grade(
     # Count ungraded for each grader
     total_to_grade = 0
     for grader_id in grader_ids:
-        ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit)
+        ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
+                                          grader_model=grader_model if regrade else None)
         print(f"  {grader_id}: {len(ungraded)} ungraded responses")
         total_to_grade += len(ungraded)
 
@@ -1008,7 +1013,8 @@ def db_grade(
 
         for grader_id in grader_ids:
             grader = GraderRegistry.get_grader(grader_id)
-            ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit)
+            ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
+                                          grader_model=grader_model if regrade else None)
             
             if not ungraded:
                 print(f"\n✓ {grader_id}: No responses to grade")
