@@ -1,6 +1,6 @@
 # Introduction
 
-This is a project to measure the morality of LLMs.
+This is a project to measure whether LLMs take an aesthetic preference.
 
 ## Getting Started
 

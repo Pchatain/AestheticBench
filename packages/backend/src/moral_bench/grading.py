@@ -21,6 +21,7 @@ from .grader_prompts import (
     GRADER_RELATIVISM_PROMPT,
     GRADER_WHIMSICAL_PROMPT,
 )
+from .question_specs import get_spec
 
 
 class Grader(ABC):
@@ -77,7 +78,18 @@ PROMPT: {question}
 RESPONSE: {response}
 
 Provide your evaluation as JSON with this exact format:
-{{"reasoning": "your explanation for the score", "score": <your_score>}}"""
+{{"reasoning": "your explanation for the score", "score": <your_score>}}{self._score_scale_instruction()}"""
+
+    def _score_scale_instruction(self) -> str:
+        """Spell out the valid score values for this grader.
+
+        Without it the grader model has to guess the scale and will sometimes
+        answer 1-5 on a yes/no question, which then fails validation.
+        """
+        spec = get_spec(self.name)
+        if spec is None:
+            return ""
+        return f"\n\nThe score must be {spec.score_hint}."
 
     @abstractmethod
     def parse(self, grader_response: str) -> Optional[Any]:
@@ -198,7 +210,9 @@ Provide your evaluation as JSON with this exact format:
                 False,
                 None,
                 "",
-                f"PARSE_ERROR: {grader_model_response[:100]}",
+                # Excerpt is long enough to show the tail of a JSON object, since
+                # the interesting failures are ones cut off before "score".
+                f"PARSE_ERROR (len={len(grader_model_response)}): {grader_model_response[:600]}",
             )
 
         if not self.validate(parsed_score):
@@ -443,7 +457,7 @@ PROMPT: {question}
 RESPONSE: {response}
 
 Provide your evaluation as JSON with this exact format:
-{{"reasoning": "your explanation for the score", "score": <your_score>}}"""
+{{"reasoning": "your explanation for the score", "score": <your_score>}}{self._score_scale_instruction()}"""
 
     def _convert_score(self, raw_score: Any) -> Optional[int]:
         """Convert raw score to int."""

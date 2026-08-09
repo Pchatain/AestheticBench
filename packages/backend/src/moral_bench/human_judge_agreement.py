@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
 from .database import MoralBenchDB
+from .question_specs import SPECS
 
 
 def load_annotations_from_json(json_path: Path, db: MoralBenchDB) -> int:
@@ -164,18 +165,18 @@ def _parse_in_range(value, allowed: tuple[int, ...]) -> Optional[int]:
     return val if val in allowed else None
 
 
-# Per-question scoring scales, mirroring QUESTION_CONFIG in annotate_tui.py.
-# `ordinal` marks scales where distance between levels is meaningful, so a
-# quadratic-weighted kappa is also worth reporting.
+# Scales come from question_specs.SPECS so they cannot drift from the graders.
+# q1 needs its own parser because the TUI stores the human answer as "Yes"/"No"
+# text while the grader emits 0/1.
 Q1Q4_SPECS = {
-    "q1": {"name": "Relativism", "labels": (0, 1), "ordinal": False, "parse": _parse_yes_no},
-    "q2": {"name": "Preference", "labels": (-1, 0, 1), "ordinal": True},
-    "q3": {"name": "Evidence", "labels": (-1, 0, 1), "ordinal": True},
-    "q4": {"name": "Justification", "labels": (1, 2, 3, 4, 5), "ordinal": True},
-    "q4_1": {"name": "Factual Depth", "labels": (0, 1), "ordinal": False},
-    "q4_2": {"name": "Specificity", "labels": (0, 1), "ordinal": False},
-    "q4_3": {"name": "Synthesis", "labels": (0, 1), "ordinal": False},
-    "q4_4": {"name": "Consistency", "labels": (0, 1), "ordinal": False},
+    grader_id: {
+        "name": spec.name,
+        "labels": spec.allowed,
+        "ordinal": spec.ordinal,
+        **({"parse": _parse_yes_no} if grader_id == "q1" else {}),
+    }
+    for grader_id, spec in SPECS.items()
+    if spec.generation == "current"
 }
 
 

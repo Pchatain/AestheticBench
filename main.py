@@ -1051,7 +1051,7 @@ def db_grade(
             if failures:
                 print(f"    {len(failures)} not stored (re-run to retry):")
                 for response_id, error_msg in failures[:5]:
-                    print(f"      response {response_id}: {error_msg[:90]}")
+                    print(f"      response {response_id}: {error_msg}")
                 if len(failures) > 5:
                     print(f"      ... and {len(failures) - 5} more")
 
