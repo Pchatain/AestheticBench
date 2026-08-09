@@ -213,35 +213,40 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
     print("  2. preference2   - Continuous [-1, 1] preference scoring")
     print("  3. justification - Quality of justification (1-5 scale) [requires preference1]")
     print("  4. custom        - Write your own grader prompt")
-    print("  5. q1            - Relativism check (0=no, 1=yes)")
-    print("  6. q2            - Preference (-1, 0, 1)")
-    print("  7. q3            - Evidence evaluation (-1, 0, 1)")
-    print("  8. q4            - Justification quality (1-5)")
-    print("  9. q4_1          - Factual Depth (0/1)")
-    print(" 10. q4_2          - Specificity (0/1)")
-    print(" 11. q4_3          - Synthesis (0/1)")
-    print(" 12. q4_4          - Consistency (0/1)")
+    print("  5. q1_1          - Premise Rejection (0/1)")
+    print("  6. q1_2          - Relativism Appeal (0/1)")
+    print("  7. q2            - Preference (-1, 0, 1)")
+    print("  8. q3            - Evidence evaluation (-1, 0, 1)")
+    print("  9. q4            - Justification quality (1-5)")
+    print(" 10. q4_1          - Factual Depth (0/1)")
+    print(" 11. q4_2          - Specificity (0/1)")
+    print(" 12. q4_3          - Synthesis (0/1)")
+    print(" 13. q4_4          - Consistency (0/1)")
+    print("     q1            - superseded by q1_1/q1_2, still gradable by name")
     print("\nYou can select multiple graders (comma-separated).")
-    print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1,q2,q3,q4'\n")
+    print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1_1,q1_2,q2'\n")
 
     grader_map = {
         "1": "preference1",
         "2": "preference2",
         "3": "justification",
         "4": "custom",
-        "5": "q1",
-        "6": "q2",
-        "7": "q3",
-        "8": "q4",
-        "9": "q4_1",
-        "10": "q4_2",
-        "11": "q4_3",
-        "12": "q4_4",
+        "5": "q1_1",
+        "6": "q1_2",
+        "7": "q2",
+        "8": "q3",
+        "9": "q4",
+        "10": "q4_1",
+        "11": "q4_2",
+        "12": "q4_3",
+        "13": "q4_4",
         "preference1": "preference1",
         "preference2": "preference2",
         "justification": "justification",
         "custom": "custom",
         "q1": "q1",
+        "q1_1": "q1_1",
+        "q1_2": "q1_2",
         "q2": "q2",
         "q3": "q3",
         "q4": "q4",
@@ -249,7 +254,7 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
         "q4_2": "q4_2",
         "q4_3": "q4_3",
         "q4_4": "q4_4",
-        "all": ["preference1", "preference2", "justification", "q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"],
+        "all": ["preference1", "preference2", "justification", "q1_1", "q1_2", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"],
     }
 
     selection = typer.prompt("Select graders")
@@ -928,7 +933,7 @@ def db_grade(
     graders: Annotated[
         str,
         typer.Option("--graders", "-g", help="Comma-separated list of graders"),
-    ] = "q1,q2,q3,q4",
+    ] = "q1_1,q1_2,q2,q3,q4",
     grader_model: Annotated[
         str,
         typer.Option("--grader-model", "-m", help="Model to use for grading"),
@@ -1158,7 +1163,7 @@ def db_agreement(
     graders: Annotated[
         str,
         typer.Option("--graders", "-g", help="Comma-separated graders for inter-model analysis"),
-    ] = "q1,q2,q3,q4",
+    ] = "q1_1,q1_2,q2,q3,q4",
 ):
     """Load human annotations and compute agreement with automated grades (Q1-Q4)."""
     print("========================================")

@@ -5,11 +5,11 @@ response, when you annotated it, your score and reasoning, and the judge's score
 and reasoning trace.
 
 Usage:
-    uv run python scripts/inspect_annotations.py                     # q1, all items
+    uv run python scripts/inspect_annotations.py                     # q1_2, all items
     uv run python scripts/inspect_annotations.py -g q2               # a different grader
-    uv run python scripts/inspect_annotations.py -g q1 --disagree    # only disagreements
+    uv run python scripts/inspect_annotations.py -g q1_1 --disagree  # only disagreements
     uv run python scripts/inspect_annotations.py --response-id 385   # one response
-    uv run python scripts/inspect_annotations.py -g q1 --full        # untruncated text
+    uv run python scripts/inspect_annotations.py -g q1 --full        # superseded q1, still readable
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "backend" / "src"))
 
-from moral_bench.question_specs import CURRENT_GRADER_IDS, get_spec  # noqa: E402
+from moral_bench.question_specs import SPECS, get_spec  # noqa: E402
 
 DB_PATH = Path(__file__).parent.parent / "moralbench.db"
 
@@ -66,9 +66,11 @@ def fetch(conn, grader_id):
     """
     return conn.execute(
         """SELECT a.response_id, a.model, a.annotator, a.created_at, a.updated_at,
-                  a.q1_score, a.q2_score, a.q3_score, a.q4_score,
+                  a.q1_score, a.q1_1_score, a.q1_2_score,
+                  a.q2_score, a.q3_score, a.q4_score,
                   a.q4_1_score, a.q4_2_score, a.q4_3_score, a.q4_4_score,
-                  a.q1_reasoning, a.q2_reasoning, a.q3_reasoning, a.q4_reasoning,
+                  a.q1_reasoning, a.q1_1_reasoning, a.q1_2_reasoning,
+                  a.q2_reasoning, a.q3_reasoning, a.q4_reasoning,
                   a.notes,
                   q.question_text, q.topic,
                   r.response_text,
@@ -85,8 +87,10 @@ def fetch(conn, grader_id):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("-g", "--grader", default="q1", choices=CURRENT_GRADER_IDS,
-                        help="which question to inspect (default: q1)")
+    # Legacy graders stay selectable: q1's grades and annotations are still in
+    # the database and are the record of why it was split into q1_1/q1_2.
+    parser.add_argument("-g", "--grader", default="q1_2", choices=sorted(SPECS),
+                        help="which question to inspect (default: q1_2)")
     parser.add_argument("--disagree", action="store_true", help="only items where human and judge differ")
     parser.add_argument("--response-id", type=int, help="show a single response id")
     parser.add_argument("--full", action="store_true", help="do not truncate long text")

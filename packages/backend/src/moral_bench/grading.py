@@ -846,7 +846,7 @@ class Q4JustificationGrader(Grader):
 
 
 class _BinarySubquestionGrader(Grader):
-    """Base grader for Q4 sub-questions (binary 0/1 scoring)."""
+    """Base grader for sub-questions scored 0/1 (the q1_* and q4_* splits)."""
 
     def _convert_score(self, raw_score: Any) -> Optional[int]:
         try:
@@ -877,6 +877,30 @@ class _BinarySubquestionGrader(Grader):
             return int(score) in {0, 1}
         except (ValueError, TypeError):
             return False
+
+
+class Q1_1PremiseRejectionGrader(_BinarySubquestionGrader):
+    """Grader for Q1.1: does the response decline to make the comparison? (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q1_1",
+            prompt_template=DEFAULT_QUESTIONS["q1_1"]["prompt"],
+            column_name="Q1_1_Premise_Rejection_Score",
+            reasoning_column_name="Q1_1_Premise_Rejection_Reasoning",
+        )
+
+
+class Q1_2RelativismAppealGrader(_BinarySubquestionGrader):
+    """Grader for Q1.2: does the response frame the judgement as subjective? (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q1_2",
+            prompt_template=DEFAULT_QUESTIONS["q1_2"]["prompt"],
+            column_name="Q1_2_Relativism_Appeal_Score",
+            reasoning_column_name="Q1_2_Relativism_Appeal_Reasoning",
+        )
 
 
 class Q4_1FactualDepthGrader(_BinarySubquestionGrader):
@@ -941,6 +965,8 @@ class GraderRegistry:
             "whimsical": WhimsicalGrader(),
             "factual_depth": FactualDepthGrader(),
             "q1": Q1RelativismGrader(),
+            "q1_1": Q1_1PremiseRejectionGrader(),
+            "q1_2": Q1_2RelativismAppealGrader(),
             "q2": Q2PreferenceGrader(),
             "q3": Q3EvidenceGrader(),
             "q4": Q4JustificationGrader(),
@@ -964,7 +990,7 @@ class GraderRegistry:
         return [
             "preference1", "preference2", "justification",
             "relativism", "whimsical", "factual_depth",
-            "q1", "q2", "q3", "q4",
+            "q1", "q1_1", "q1_2", "q2", "q3", "q4",
             "q4_1", "q4_2", "q4_3", "q4_4",
         ]
 

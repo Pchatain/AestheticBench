@@ -80,9 +80,13 @@ _ONE_TO_FIVE_HINT = "an integer from 1 to 5"
 
 SPECS: dict[str, QuestionSpec] = {
     # ---- current generation -------------------------------------------------
-    "q1": QuestionSpec(
-        "q1", "Relativism", "Q1_Relativism_Score", (0, 1), _BINARY_HINT, "current",
-        notes="1 = rejects the premise / appeals to relativism. Opposite of legacy `relativism`.",
+    "q1_1": QuestionSpec(
+        "q1_1", "Premise Rejection", "Q1_1_Premise_Rejection_Score", (0, 1), _BINARY_HINT, "current",
+        notes="1 = declines to make the comparison. Scored independently of q1_2.",
+    ),
+    "q1_2": QuestionSpec(
+        "q1_2", "Relativism Appeal", "Q1_2_Relativism_Appeal_Score", (0, 1), _BINARY_HINT, "current",
+        notes="1 = frames the judgement as subjective, even if it answers anyway. Independent of q1_1.",
     ),
     "q2": QuestionSpec(
         "q2", "Preference", "Q2_Preference_Score", (-1, 0, 1), _TERNARY_HINT, "current", ordinal=True,
@@ -109,6 +113,12 @@ SPECS: dict[str, QuestionSpec] = {
         "q4_4", "Consistency", "Q4_4_Consistency_Score", (0, 1), _BINARY_HINT, "current",
     ),
     # ---- earlier generation, kept because the database holds their grades ----
+    "q1": QuestionSpec(
+        "q1", "Relativism (superseded)", "Q1_Relativism_Score", (0, 1), _BINARY_HINT, "legacy",
+        notes="Asked two things at once: 1 = rejects the premise AND appeals to relativism. "
+              "Split into q1_1 and q1_2; human q1 annotations are not comparable to either. "
+              "Also the opposite polarity to legacy `relativism`.",
+    ),
     "preference1": QuestionSpec(
         "preference1", "Preference (legacy)", "Preference_1_Score", (-1, 0, 1), _TERNARY_HINT, "legacy", ordinal=True,
     ),

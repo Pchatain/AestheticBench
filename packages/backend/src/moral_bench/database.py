@@ -56,8 +56,12 @@ class Annotation(BaseModel):
     justification_reasoning: Optional[str] = None
     justification_score: Optional[int] = None
     # Q1-Q4 human annotation fields
-    q1_score: Optional[str] = None  # Yes/No
+    q1_score: Optional[str] = None  # Yes/No - superseded by q1_1/q1_2
     q1_reasoning: Optional[str] = None
+    q1_1_score: Optional[int] = None  # 0/1 - rejects the premise
+    q1_1_reasoning: Optional[str] = None
+    q1_2_score: Optional[int] = None  # 0/1 - appeals to relativism
+    q1_2_reasoning: Optional[str] = None
     q2_score: Optional[int] = None  # -1, 0, 1
     q2_reasoning: Optional[str] = None
     q3_score: Optional[int] = None  # -1, 0, 1
@@ -127,6 +131,10 @@ class MoralBenchDB:
         justification_score INTEGER,
         q1_score TEXT,
         q1_reasoning TEXT,
+        q1_1_score INTEGER,
+        q1_1_reasoning TEXT,
+        q1_2_score INTEGER,
+        q1_2_reasoning TEXT,
         q2_score INTEGER,
         q2_reasoning TEXT,
         q3_score INTEGER,
@@ -174,6 +182,10 @@ class MoralBenchDB:
             "ALTER TABLE annotations ADD COLUMN q4_4_reasoning TEXT",
             "ALTER TABLE grades ADD COLUMN grader_model TEXT",
             "ALTER TABLE grades ADD COLUMN grader_prompt TEXT",
+            "ALTER TABLE annotations ADD COLUMN q1_1_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q1_1_reasoning TEXT",
+            "ALTER TABLE annotations ADD COLUMN q1_2_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q1_2_reasoning TEXT",
         ]
         with self._connect() as conn:
             for sql in new_columns:
@@ -478,6 +490,10 @@ class MoralBenchDB:
         justification_score: Optional[int] = None,
         q1_score: Optional[str] = None,
         q1_reasoning: Optional[str] = None,
+        q1_1_score: Optional[int] = None,
+        q1_1_reasoning: Optional[str] = None,
+        q1_2_score: Optional[int] = None,
+        q1_2_reasoning: Optional[str] = None,
         q2_score: Optional[int] = None,
         q2_reasoning: Optional[str] = None,
         q3_score: Optional[int] = None,
@@ -502,13 +518,15 @@ class MoralBenchDB:
                 """INSERT OR REPLACE INTO annotations
                    (id, response_id, model, annotator, notes, preference_reasoning, preference_score,
                     justification_reasoning, justification_score,
-                    q1_score, q1_reasoning, q2_score, q2_reasoning,
+                    q1_score, q1_reasoning,
+                    q1_1_score, q1_1_reasoning, q1_2_score, q1_2_reasoning,
+                    q2_score, q2_reasoning,
                     q3_score, q3_reasoning,
                     q4_score, q4_reasoning,
                     q4_1_score, q4_1_reasoning, q4_2_score, q4_2_reasoning,
                     q4_3_score, q4_3_reasoning, q4_4_score, q4_4_reasoning,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     annotation_id,
                     response_id,
@@ -521,6 +539,10 @@ class MoralBenchDB:
                     justification_score,
                     q1_score,
                     q1_reasoning,
+                    q1_1_score,
+                    q1_1_reasoning,
+                    q1_2_score,
+                    q1_2_reasoning,
                     q2_score,
                     q2_reasoning,
                     q3_score,
@@ -578,7 +600,8 @@ class MoralBenchDB:
             "WHERE a.model = r.model"
             if valid_only
             else "WHERE a.preference_score IS NOT NULL OR a.justification_score IS NOT NULL"
-            " OR a.q1_score IS NOT NULL OR a.q2_score IS NOT NULL"
+            " OR a.q1_score IS NOT NULL OR a.q1_1_score IS NOT NULL"
+            " OR a.q1_2_score IS NOT NULL OR a.q2_score IS NOT NULL"
             " OR a.q3_score IS NOT NULL OR a.q4_score IS NOT NULL"
         )
         with self._connect() as conn:
@@ -592,6 +615,8 @@ class MoralBenchDB:
                        a.preference_score as human_preference,
                        a.justification_score as human_justification,
                        a.q1_score as human_q1,
+                       a.q1_1_score as human_q1_1,
+                       a.q1_2_score as human_q1_2,
                        a.q2_score as human_q2,
                        a.q3_score as human_q3,
                        a.q4_score as human_q4,
@@ -600,6 +625,8 @@ class MoralBenchDB:
                        a.q4_3_score as human_q4_3,
                        a.q4_4_score as human_q4_4,
                        g_q1.score as q1_score,
+                       g_q1_1.score as q1_1_score,
+                       g_q1_2.score as q1_2_score,
                        g_q2.score as q2_score,
                        g_q3.score as q3_score,
                        g_q4.score as q4_score,
@@ -613,6 +640,8 @@ class MoralBenchDB:
                    FROM annotations a
                    JOIN responses r ON a.response_id = r.id
                    LEFT JOIN grades g_q1 ON a.response_id = g_q1.response_id AND g_q1.grader_id = 'q1'
+                   LEFT JOIN grades g_q1_1 ON a.response_id = g_q1_1.response_id AND g_q1_1.grader_id = 'q1_1'
+                   LEFT JOIN grades g_q1_2 ON a.response_id = g_q1_2.response_id AND g_q1_2.grader_id = 'q1_2'
                    LEFT JOIN grades g_q2 ON a.response_id = g_q2.response_id AND g_q2.grader_id = 'q2'
                    LEFT JOIN grades g_q3 ON a.response_id = g_q3.response_id AND g_q3.grader_id = 'q3'
                    LEFT JOIN grades g_q4 ON a.response_id = g_q4.response_id AND g_q4.grader_id = 'q4'

@@ -48,7 +48,7 @@ class FileValidationResult:
 class ConfigService:
     """Service for validation and configuration resolution."""
 
-    VALID_GRADERS = {"preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"}
+    VALID_GRADERS = {"preference1", "preference2", "justification", "relativism", "whimsical", "factual_depth", "q1", "q1_1", "q1_2", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"}
 
     GRADER_DEPENDENCIES = {
         "justification": ["preference1"],
@@ -78,8 +78,22 @@ class ConfigService:
         ),
         "q1": GraderInfo(
             id="q1",
-            name="Q1 Relativism",
-            description="Does answer reject premise and appeal to relativism?",
+            name="Q1 Relativism (superseded)",
+            description="Does answer reject premise AND appeal to relativism? Split into q1_1/q1_2.",
+            score_range="0 (no), 1 (yes)",
+            dependencies=[],
+        ),
+        "q1_1": GraderInfo(
+            id="q1_1",
+            name="Q1.1 Premise Rejection",
+            description="Does the answer decline to make the comparison?",
+            score_range="0 (no), 1 (yes)",
+            dependencies=[],
+        ),
+        "q1_2": GraderInfo(
+            id="q1_2",
+            name="Q1.2 Relativism Appeal",
+            description="Does the answer frame the judgement as subjective?",
             score_range="0 (no), 1 (yes)",
             dependencies=[],
         ),

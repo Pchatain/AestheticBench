@@ -452,13 +452,13 @@ def compute_inter_model_agreement(db: MoralBenchDB, graders: list[str] = None) -
     
     Args:
         db: MoralBenchDB instance
-        graders: List of grader IDs to analyze. Defaults to q1-q4.
+        graders: List of grader IDs to analyze. Defaults to the current q-series.
     
     Returns:
         Dictionary with inter-model agreement metrics
     """
     if graders is None:
-        graders = ["q1", "q2", "q3", "q4"]
+        graders = ["q1_1", "q1_2", "q2", "q3", "q4"]
     
     models = db.get_models()
     
@@ -595,7 +595,7 @@ def create_agreement_plots(
             hovertemplate="Model A: %{y}<br>Model B: %{x}<br>Kappa: %{z:.3f}<extra></extra>",
         ))
         
-        grader_names = {"q1": "Relativism", "q2": "Preference", "q3": "Evidence", "q4": "Justification"}
+        grader_names = {gid: spec.name for gid, spec in SPECS.items()}
         fig.update_layout(
             title=f"Inter-Model Agreement - {grader_names.get(grader_id, grader_id)} ({grader_id})",
             xaxis_title="Model",
@@ -752,10 +752,7 @@ def create_agreement_table(inter_model_agreement: dict) -> str:
     lines = ["# Inter-Model Agreement Summary\n"]
     
     grader_names = {
-        "q1": "Relativism", 
-        "q2": "Preference", 
-        "q3": "Evidence", 
-        "q4": "Justification",
+        **{gid: spec.name for gid, spec in SPECS.items()},
         "preference1": "Preference (Categorical)",
         "preference2": "Preference (Continuous)",
         "justification": "Justification (Legacy)",
