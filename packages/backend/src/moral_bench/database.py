@@ -462,11 +462,16 @@ class MoralBenchDB:
         annotated_only: bool = False,
         limit: Optional[int] = None,
         grader_model: Optional[str] = None,
+        min_question_id: Optional[int] = None,
     ) -> list[tuple[Response, Question]]:
         """Get responses that haven't been graded by the specified grader.
 
         Set annotated_only to restrict to responses that carry a human annotation,
         which is what human/judge agreement analysis needs.
+
+        Pass min_question_id to grade only questions added at or after a given id,
+        which is how newly imported questions get graded without re-sweeping the
+        whole database with a second grader model.
 
         Pass grader_model to mean "not yet graded by THAT model". Without it a
         response already graded by any model counts as done, so re-grading the
@@ -485,6 +490,10 @@ class MoralBenchDB:
         if model:
             conditions.append("r.model = ?")
             params.append(model)
+
+        if min_question_id is not None:
+            conditions.append("r.question_id >= ?")
+            params.append(min_question_id)
 
         if annotated_only:
             conditions.append(

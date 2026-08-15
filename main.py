@@ -950,6 +950,10 @@ def db_grade(
         int,
         typer.Option("--limit", help="Grade at most this many responses per grader (sampling)"),
     ] = None,
+    min_question_id: Annotated[
+        int,
+        typer.Option("--min-question-id", help="Only grade responses to questions with id >= this"),
+    ] = None,
     regrade: Annotated[
         bool,
         typer.Option("--regrade", help="Grade responses this grader model has not judged, even if another model has"),
@@ -988,7 +992,8 @@ def db_grade(
     total_to_grade = 0
     for grader_id in grader_ids:
         ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
-                                          grader_model=grader_model if regrade else None)
+                                          grader_model=grader_model if regrade else None,
+                                          min_question_id=min_question_id)
         print(f"  {grader_id}: {len(ungraded)} ungraded responses")
         total_to_grade += len(ungraded)
 
@@ -1014,7 +1019,8 @@ def db_grade(
         for grader_id in grader_ids:
             grader = GraderRegistry.get_grader(grader_id)
             ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
-                                          grader_model=grader_model if regrade else None)
+                                          grader_model=grader_model if regrade else None,
+                                          min_question_id=min_question_id)
             
             if not ungraded:
                 print(f"\n✓ {grader_id}: No responses to grade")
