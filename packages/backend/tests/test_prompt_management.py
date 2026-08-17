@@ -7,15 +7,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moral_bench.client import OpenRouterClient
-from moral_bench.grading import (
+from aesthetic_bench.client import OpenRouterClient
+from aesthetic_bench.grading import (
     GradingProcessor,
     Preference1Grader,
     JustificationGrader,
     Q1RelativismGrader,
 )
-from moral_bench.processor import CSVReader, PromptProcessor
-from moral_bench.text_utils import strip_entity_brackets, swap_entities
+from aesthetic_bench.processor import CSVReader, PromptProcessor
+from aesthetic_bench.text_utils import strip_entity_brackets, swap_entities
 
 
 # ---------------------------------------------------------------------------

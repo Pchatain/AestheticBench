@@ -9,15 +9,15 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from moral_bench.database import MoralBenchDB
+from aesthetic_bench.database import AestheticBenchDB
 
 router = APIRouter()
 
 DATA_DIR = Path(__file__).parents[3] / "data"
 ANNOTATIONS_FILE = DATA_DIR / "annotations.json"
 
-# Database path - use the main moralbench.db
-DB_PATH = Path(__file__).parents[5] / "moralbench.db"
+# Database path - use the main aestheticbench.db
+DB_PATH = Path(__file__).parents[5] / "aestheticbench.db"
 
 
 class AnnotationCreate(BaseModel):
@@ -179,9 +179,9 @@ class ResponseWithQ1Q4(BaseModel):
     human_q4_reasoning: Optional[str] = None
 
 
-def _get_db() -> MoralBenchDB:
+def _get_db() -> AestheticBenchDB:
     """Get database connection."""
-    return MoralBenchDB(DB_PATH)
+    return AestheticBenchDB(DB_PATH)
 
 
 @router.get("/annotations/q1q4")

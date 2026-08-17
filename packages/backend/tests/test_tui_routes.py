@@ -8,8 +8,8 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from moralbench_api.main import app
-from moralbench_api.routes import tui
+from aestheticbench_api.main import app
+from aestheticbench_api.routes import tui
 
 
 @pytest.fixture

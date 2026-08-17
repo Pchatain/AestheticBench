@@ -7,8 +7,8 @@ classes drift apart.
 
 import pytest
 
-from moral_bench.grading import GraderRegistry
-from moral_bench.question_specs import SPECS, get_spec
+from aesthetic_bench.grading import GraderRegistry
+from aesthetic_bench.question_specs import SPECS, get_spec
 
 
 @pytest.mark.parametrize("grader_id", sorted(SPECS))

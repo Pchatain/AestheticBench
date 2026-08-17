@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from moral_bench.grader_prompts import DEFAULT_QUESTIONS
+from aesthetic_bench.grader_prompts import DEFAULT_QUESTIONS
 
 
 from ._shared import (

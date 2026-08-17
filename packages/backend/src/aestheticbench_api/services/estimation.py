@@ -4,9 +4,9 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from moral_bench import OpenRouterClient
-from moral_bench.processor import CSVReader
-from moral_bench.text_utils import strip_entity_brackets
+from aesthetic_bench import OpenRouterClient
+from aesthetic_bench.processor import CSVReader
+from aesthetic_bench.text_utils import strip_entity_brackets
 
 
 @dataclass

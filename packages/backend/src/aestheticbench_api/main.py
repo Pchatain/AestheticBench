@@ -1,11 +1,11 @@
-"""FastAPI application for MoralBench results viewer."""
+"""FastAPI application for AestheticBench results viewer."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import annotations, prompts, results, workflow, experiments, tui
 
-app = FastAPI(title="MoralBench API", version="0.1.0")
+app = FastAPI(title="AestheticBench API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

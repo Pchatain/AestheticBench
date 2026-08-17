@@ -5,7 +5,7 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=========================================="
-echo "  MoralBench OpenRouter Setup"
+echo "  AestheticBench OpenRouter Setup"
 echo "=========================================="
 echo ""
 
@@ -120,7 +120,7 @@ if uv run --env-file .env main.py health-check; then
     echo "  Setup Complete!"
     echo "=========================================="
     echo ""
-    echo "To run MoralBench in the future, use:"
+    echo "To run AestheticBench in the future, use:"
     echo "  uv run --env-file .env main.py"
     echo ""
 else

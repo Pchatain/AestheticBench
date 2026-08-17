@@ -4,8 +4,8 @@ import httpx
 import pytest
 from unittest.mock import MagicMock, patch
 
-from moral_bench.client import OpenRouterClient
-from moral_bench.config import Config
+from aesthetic_bench.client import OpenRouterClient
+from aesthetic_bench.config import Config
 
 
 @pytest.fixture

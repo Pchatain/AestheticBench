@@ -20,9 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "backend" / "src"))
 
-from moral_bench.question_specs import SPECS, get_spec  # noqa: E402
+from aesthetic_bench.question_specs import SPECS, get_spec  # noqa: E402
 
-DB_PATH = Path(__file__).parent.parent / "moralbench.db"
+DB_PATH = Path(__file__).parent.parent / "aestheticbench.db"
 
 
 def connect():

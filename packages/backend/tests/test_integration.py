@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from moral_bench.client import OpenRouterClient
-from moral_bench.config import Config
-from moral_bench.errors import setup_error_logging, log_parse_error
-from moral_bench.grading import GradingProcessor, Preference1Grader
+from aesthetic_bench.client import OpenRouterClient
+from aesthetic_bench.config import Config
+from aesthetic_bench.errors import setup_error_logging, log_parse_error
+from aesthetic_bench.grading import GradingProcessor, Preference1Grader
 
 
 # Skip if no API key

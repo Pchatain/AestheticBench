@@ -1,4 +1,4 @@
-"""SQLite database for MoralBench with question-centric data model."""
+"""SQLite database for AestheticBench with question-centric data model."""
 
 import csv
 import sqlite3
@@ -80,8 +80,8 @@ class Annotation(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class MoralBenchDB:
-    """SQLite database for MoralBench experiments."""
+class AestheticBenchDB:
+    """SQLite database for AestheticBench experiments."""
 
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS questions (
@@ -162,7 +162,7 @@ class MoralBenchDB:
     CREATE INDEX IF NOT EXISTS idx_annotations_model ON annotations(model);
     """
 
-    def __init__(self, db_path: str | Path = "moralbench.db"):
+    def __init__(self, db_path: str | Path = "aestheticbench.db"):
         self.db_path = Path(db_path)
         self._init_db()
 
@@ -852,7 +852,7 @@ class MoralBenchDB:
         try:
             result = subprocess.run(
                 ["git", "log", "-1", "--format=%h", "--",
-                 "packages/backend/src/moral_bench/grader_prompts.py"],
+                 "packages/backend/src/aesthetic_bench/grader_prompts.py"],
                 capture_output=True,
                 text=True,
                 cwd=self.db_path.parent,

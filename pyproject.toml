@@ -1,5 +1,5 @@
 [project]
-name = "moralbench"
+name = "aestheticbench"
 version = "0.1.0"
 description = "Package to measure the morality of LLMs"
 readme = "README.md"
@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "ipykernel>=7.2.0",
     "kaleido>=1.2.0",
-    "moralbench-api",
+    "aestheticbench-api",
     "plotly>=6.5.2",
 ]
 
@@ -15,7 +15,7 @@ dependencies = [
 members = ["packages/backend"]
 
 [tool.uv.sources]
-moralbench-api = { workspace = true }
+aestheticbench-api = { workspace = true }
 
 [dependency-groups]
 dev = [

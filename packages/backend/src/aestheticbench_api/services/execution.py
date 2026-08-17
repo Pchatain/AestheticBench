@@ -8,9 +8,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable
 
-from moral_bench import Config, OpenRouterClient
-from moral_bench.grading import GradingProcessor
-from moral_bench.processor import PromptProcessor
+from aesthetic_bench import Config, OpenRouterClient
+from aesthetic_bench.grading import GradingProcessor
+from aesthetic_bench.processor import PromptProcessor
 
 
 class JobStatus(str, Enum):

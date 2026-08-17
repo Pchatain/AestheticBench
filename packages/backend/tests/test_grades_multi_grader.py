@@ -6,12 +6,12 @@ there was no test that would have caught it.
 
 import pytest
 
-from moral_bench.database import MoralBenchDB
+from aesthetic_bench.database import AestheticBenchDB
 
 
 @pytest.fixture
 def db(tmp_path):
-    database = MoralBenchDB(tmp_path / "test.db")
+    database = AestheticBenchDB(tmp_path / "test.db")
     question_id = database.add_question("Test", "Is A or B better?")
     response_id = database.add_response(question_id, "some/model", "A is better.", 0)
     return database, response_id

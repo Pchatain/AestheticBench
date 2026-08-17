@@ -1,4 +1,4 @@
-"""Grading functionality for MoralBench responses."""
+"""Grading functionality for AestheticBench responses."""
 
 import csv
 import json

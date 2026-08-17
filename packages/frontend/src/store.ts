@@ -22,6 +22,6 @@ export const useAppStore = create<AppStore>()(
       rowHeight: 80,
       setRowHeight: (height) => set({ rowHeight: height }),
     }),
-    { name: 'moralbench-app-store' },
+    { name: 'aestheticbench-app-store' },
   )
 )

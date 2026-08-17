@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CSV Cleaner for MoralBench results.
+CSV Cleaner for AestheticBench results.
 
 Combines multiple model result CSV files into a single table with model names as columns.
 """
@@ -192,7 +192,7 @@ def combine_results(results_dir: Path, model_ordering: List[str] = None) -> None
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Combine MoralBench model results into a single CSV"
+        description="Combine AestheticBench model results into a single CSV"
     )
     parser.add_argument(
         "results_dir",

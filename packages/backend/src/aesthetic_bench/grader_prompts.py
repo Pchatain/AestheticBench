@@ -1,5 +1,5 @@
 """
-The LLM Grader for MoralBench. Here we grade model responses according to a few axes and in a few
+The LLM Grader for AestheticBench. Here we grade model responses according to a few axes and in a few
 different settings. We parse those outputs into either categorical or numerical results and we
 handle errors in the model by surfacing them to the user. For example, if the model doesn't output
 something that can be parsed into the right category or a number in the correct range, we will
