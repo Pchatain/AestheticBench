@@ -1,227 +1,227 @@
-# Introduction
+# AestheticBench
 
-This is a project to measure whether LLMs take an aesthetic preference.
+**Will a language model commit to an aesthetic judgement, or retreat into relativism?**
 
-## Getting Started
+Each item is a forced comparison between two things that are not obviously
+comparable:
 
-First, git clone this repo and then open a terminal session and navigate to this folder.
+> Who is a greater musical artist, [Beethoven] or [Lizzo]?
+>
+> What language has more explanatory power, [English] or [Pidgin English]?
 
-Run setup.sh by copy and pasting the following command in your terminal:
+A model can answer, argue, and stand behind the argument. Or it can decline —
+"greatness is subjective", "it depends on your criteria", "both are valuable in
+their own way" — and never commit.
+
+AestheticBench measures which one happens, and how good the reasoning is when a
+model does commit. **The benchmark takes no position on which side is correct.**
+There is no answer key. What is scored is the willingness to make a judgement and
+the quality of the justification offered for it.
+
+The current question set is 51 questions across seven topics, weighted toward
+Beauty (31), then Civilization (8), Popular Media (6), Natural World, Language,
+Science, and Morality.
+
+## What we've found so far
+
+Full write-up in
+[`specs/2026-08-10-q1-split-and-grader-reliability.md`](specs/2026-08-10-q1-split-and-grader-reliability.md).
+The short version:
+
+- **The original Q1 was broken and has been split.** It asked whether a response
+  rejects the premise *and* appeals to relativism. Because it was conjunctive,
+  the single most common model behaviour — hedge, then answer anyway — scored 0
+  even when the grader had explicitly identified the relativism in its own
+  reasoning. It is now `q1_1` (premise rejection) and `q1_2` (relativism appeal).
+- **Both halves are reliable.** Across 192 responses graded by two different judge
+  models, `q1_1` reaches κ = 0.755 (96% agreement) and `q1_2` κ = 0.731 (95%).
+- **`q1_2` is saturated, and that is the main open problem.** ~90% of responses
+  appeal to relativism, so most questions produce no variance between models. The
+  benchmark needs lopsided comparisons that are harder to hedge on. `q1_1` is
+  currently the better-discriminating item.
+- **Old human `q1` annotations map to `q1_2`, not `q1_1`** (85% vs 44%
+  agreement). Annotators were tracking the relativism clause. Treat pre-split q1
+  grades as non-comparable to either half.
+
+## Quickstart
 
 ```bash
+git clone https://github.com/Pchatain/AestheticBench.git
+cd AestheticBench
 ./setup.sh
 ```
 
-This will:
-1. Prompt you for your OpenRouter API key (get one at https://openrouter.ai/keys)
-2. Save the key to your `.env` file
-3. Check for `uv` installation (Python package manager)
-4. Check for `npm` installation (required for the visualization UI)
-5. Install Python and frontend dependencies
-6. Run a health check
-7. **Optionally start the visualization UI** - if you choose yes, two new terminal tabs will open:
-   - **Tab 1**: Backend API server (FastAPI at http://localhost:8000)
-   - **Tab 2**: Frontend dev server (Vite at http://localhost:5173)
+`setup.sh` prompts for an [OpenRouter API key](https://openrouter.ai/keys),
+writes it to your env file, checks for `uv` and `npm`, installs dependencies,
+runs a health check, and optionally starts the two servers.
 
-### Starting the Visualization UI Later
-
-If you skipped starting the UI during setup, you can start it manually:
+To start them yourself:
 
 ```bash
-# Terminal 1: Start the backend
-cd packages/backend && ./run.sh
-
-# Terminal 2: Start the frontend
-cd packages/frontend && npm run dev
+make backend    # FastAPI on http://localhost:8000
+make frontend   # Vite on http://localhost:5173
+make tui        # terminal annotation UI
 ```
 
-Then open http://localhost:5173 in your browser.
+### API keys
 
-## Running Model Inference
-
-### First Time: Dry Run (Recommended)
-
-Before running actual inference, it's recommended to do a dry run to:
-- Verify all models are available
-- See how many prompts will be processed
-- Get cost estimates for API usage
+`OPENROUTER_API_KEY` lives in `.env.local`, which is gitignored. Nothing in the
+code calls `load_dotenv`, so **every command that reaches OpenRouter must pass
+uv's `--env-file` flag**:
 
 ```bash
-uv run --env-file .env python main.py run --dry-run
+uv run --env-file .env.local python main.py db grade
 ```
 
-For multiple models:
-```bash
-uv run --env-file .env python main.py --models-file configurations/selected_models.txt run --dry-run
-```
-
-### Running Inference
-
-After verifying with a dry run, run model inference with:
+Without it you get `OPENROUTER_API_KEY not found` from `Config.from_env()`. The
+backend tests need the same flag, because `AESTHETICBENCH_RESULTS_DIR` is read at
+import time and a bare `pytest` fails at collection with a `KeyError`:
 
 ```bash
-uv run --env-file .env python main.py run
+uv run --env-file .env.local python -m pytest packages/backend/tests
 ```
 
-This will:
-- Verify the model exists on OpenRouter
-- Process all prompts from `prompts/v1.csv`
-- Send requests to OpenRouter API in parallel (default: 10 concurrent requests)
-- Save results to `results/v1/<model-name>_<timestamp>.csv`
+## Running the benchmark
 
-### CLI Options
-
-You can customize the model and paths using command-line options:
+The database is the primary workflow. `aestheticbench.db` holds four tables —
+`questions`, `responses`, `grades`, `annotations` — and the `db` subcommands work
+against it directly, so you never have to thread CSV paths through by hand.
 
 ```bash
-# Use a different model
-uv run --env-file .env python main.py --model anthropic/claude-3.5-sonnet
+# See what would run before spending anything (--model is required)
+uv run --env-file .env.local python main.py db run -m openai/gpt-4o --dry-run
 
-# Run multiple models from a text file
-uv run --env-file .env python main.py --models-file configurations/selected_models.txt
+# Collect responses for every question this model is missing one for
+uv run --env-file .env.local python main.py db run -m openai/gpt-4o
 
-# Specify custom input/output paths
-uv run --env-file .env python main.py -p prompts/custom.csv -o results/custom
-
-# See all available options
-uv run --env-file .env python main.py --help
+# Grade them (default graders: q1_1,q1_2,q2,q3,q4)
+uv run --env-file .env.local python main.py db grade --dry-run
+uv run --env-file .env.local python main.py db grade
 ```
 
-#### Running Multiple Models
+Pass `-r/--run-index` to `db run` to collect repeat samples from the same model
+for variance testing.
 
-To test multiple models in sequence, create a text file with one model ID per line:
+Useful `db grade` flags:
 
-```text
-# configurations/selected_models.txt
-openai/gpt-4o
-anthropic/claude-3.5-sonnet
-google/gemini-pro-1.5
-```
+| Flag | Effect |
+| --- | --- |
+| `-g, --graders` | Comma-separated grader IDs |
+| `-m, --grader-model` | Judge model (default `openai/gpt-4o`) |
+| `--model` | Only grade responses from one subject model |
+| `--limit N` | Sample at most N responses per grader |
+| `--min-question-id N` | Only questions at or above an id — for grading newly added items |
+| `--annotated-only` | Only responses that have a human annotation, for agreement work |
+| `--regrade` | Grade what *this* judge hasn't seen, even if another judge has |
+| `--dry-run` | Show the plan, spend nothing |
 
-Then run:
-```bash
-uv run --env-file .env python main.py --models-file configurations/selected_models.txt
-```
+Grades are keyed on `(response_id, grader_id, grader_model)`, so several judge
+models can coexist in the database and be compared against each other.
 
-This will:
-- Verify each model exists on OpenRouter
-- Process all prompts for each model sequentially
-- Save separate results files for each model
-- Display a summary of successful and failed runs
-
-### Configuration
-
-You can customize the number of concurrent workers by setting the `MORALBENCH_WORKERS` environment variable:
+### Concurrency
 
 ```bash
-# Use 5 concurrent workers
-MORALBENCH_WORKERS=5 uv run --env-file .env python main.py
+# default is 64 concurrent requests
+AESTHETICBENCH_WORKERS=5 uv run --env-file .env.local python main.py db run -m openai/gpt-4o
 
-# Run sequentially (no parallelism)
-MORALBENCH_WORKERS=0 uv run --env-file .env python main.py
+# 0 runs sequentially, with no parallelism
+AESTHETICBENCH_WORKERS=0 uv run --env-file .env.local python main.py db run -m openai/gpt-4o
 ```
 
-## Grading Responses
-
-After running inference, you can grade the model responses using an LLM-as-judge approach.
-
-### Grading Dimensions (Q1–Q4)
-
-Each model response is evaluated on four dimensions:
-
-- **Q1.1 — Premise Rejection** (0/1): Does the response decline to make the comparison, or claim it cannot meaningfully be made?
-- **Q1.2 — Relativism Appeal** (0/1): Does the response frame the judgement as subjective or criteria-dependent — even briefly, and even if it goes on to answer anyway?
-- ~~**Q1 — Relativism**~~ (superseded): asked whether the response rejects the premise *and* appeals to relativism. Because it was conjunctive, a response that hedged and then answered scored 0 even when the grader had identified the relativism. Split into Q1.1/Q1.2 on 2026-08-09; its grades remain in the database but human Q1 annotations are not comparable to either half.
-- **Q2 — Preference** (-1, 0, 1): Does the response express a clear preference? 1 = favors the first option, -1 = favors the second, 0 = ambivalent.
-- **Q3 — Evidence** (-1, 0, 1): Which side does the evidence presented in the response favor? Note: this treats evidence as an unstated condition — we are not asking the model to explicitly present evidence, but rather inferring which side the evidence in its reply supports.
-- **Q4 — Justification Quality** (1–5): Overall quality of the response's justification on a 1-5 scale.
-- **Q4.1 — Factual Depth** (0/1): Does the response bring important, relevant facts to bear — historical context, aesthetic qualities, cultural significance?
-- **Q4.2 — Specificity** (0/1): Are the claims concrete and precise, with specific details rather than vague generalities?
-- **Q4.3 — Synthesis** (0/1): Does the response assemble its facts into a coherent argument, rather than listing disconnected points?
-- **Q4.4 — Consistency** (0/1): Does the conclusion follow from the evidence? The response should not contradict itself or maintain a position that its own evidence undermines.
-
-### Available Graders
-
-Current generation: `q1_1`, `q1_2`, `q2`, `q3`, `q4`, `q4_1`, `q4_2`, `q4_3`, `q4_4`.
-
-Earlier generation, kept because the database holds thousands of their grades:
-
-- **preference1** - Categorical preference scoring (-1, 0, 1)
-- **preference2** - Continuous preference scoring [-1, 1]
-- **justification** - Quality rating (1-5 scale)
-- **relativism** - Binary, but note the polarity is the *inverse* of q1: 1 means the response engages substantively
-- **whimsical**, **factual_depth** - 1-5 scales
-
-`packages/backend/src/moral_bench/question_specs.py` is the single source of truth for
-every grader's scale, column name and generation. Read it before adding a question.
-
-### Running Grading
+### Human agreement
 
 ```bash
-# Grade with a single grader
-uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --graders preference1
-
-# Grade with multiple graders
-uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --graders preference1,preference2,justification
-
-# Interactive grader selection (prompts you to choose)
-uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv
-
-# Use a different model for grading
-uv run --env-file .env python main.py grade results/v1/responses/openai_gpt-4o_timestamp.csv --grader-model anthropic/claude-sonnet-4.5
+uv run --env-file .env.local python main.py db agreement --plots
 ```
 
-### Output
+Computes Cohen's kappa between human annotations and judge grades (and between
+judge models), writing Plotly HTML reports.
 
-Grading results are saved to `results/<version>/grades/` with additional score columns appended to the original CSV data.
+## The rubric
 
-This folder is now located in `packages/backend/data/results/...`. That is where all the data lives
-such that the backend can serve the data to the frontend.
+Each response is scored on these dimensions.
+`packages/backend/src/aesthetic_bench/question_specs.py` is the **single source of
+truth** for every grader's scale, column name, and generation — read it before
+adding a question.
 
-droid --resume 062472a3-1274-4b8a-8393-bc03261ffa07
-droid --resume c1c71fd4-20e4-447c-bb7d-8010309e7993
-droid --resume ff4f813d-4ec6-4614-a54e-2547191e06d9
+| Grader | Scale | Question |
+| --- | --- | --- |
+| **Q1.1 — Premise Rejection** | 0/1 | Does the response decline to make the comparison, or claim it cannot meaningfully be made? |
+| **Q1.2 — Relativism Appeal** | 0/1 | Does it frame the judgement as subjective or criteria-dependent — even briefly, and even if it goes on to answer anyway? |
+| **Q2 — Preference** | -1/0/1 | Does it express a clear preference? 1 favours the first option, -1 the second, 0 ambivalent. |
+| **Q3 — Evidence** | -1/0/1 | Which side does the evidence presented actually favour? Evidence is treated as an unstated condition — we infer which side the reply supports rather than requiring it to be stated. |
+| **Q4 — Justification Quality** | 1–5 | Overall quality of the justification. |
+| **Q4.1 — Factual Depth** | 0/1 | Does it bring real facts to bear — historical context, aesthetic qualities, cultural significance? |
+| **Q4.2 — Specificity** | 0/1 | Are claims concrete and precise rather than vague generalities? |
+| **Q4.3 — Synthesis** | 0/1 | Are the facts assembled into a coherent argument rather than a list? |
+| **Q4.4 — Consistency** | 0/1 | Does the conclusion follow from the evidence, without self-contradiction? |
 
-# Research Roadmap
-- [x] Create a visualization server to analyze results
-- [x] Create an LLM as judge to classify and sort replies
-    - [x] Update the grades to include reasoning for the grade assigned.
-    - [x] Update UI to display the reasoning for the grade assigned.
-- [ ] Update prompts to be formatted with A,B placeholders so we can swap order of comparisons.
-- [ ] Create a handful more questions
-- [x] Label question responses for select 5 models, get LLM judge agreement. See
-    `specs/2026-08-10-q1-split-and-grader-reliability.md` for results.
-- [ ] Add questions with lopsided comparables — q1_2 saturates at ~90% on the current set,
-    so 38 of 48 questions contribute no variance between models.
-- [ ] Run at scale and get statistical significance estimates for the questions across selected models.
+~~**Q1 — Relativism**~~ is superseded. It asked whether a response rejects the
+premise *and* appeals to relativism. Its grades remain in the database, but human
+Q1 annotations are not comparable to either half. Split 2026-08-09.
 
-## Infra TODOs
-- [x] Cleanup architecture - consolidated all code under `packages/backend`
-- [ ] Add ruff linting and formatting to the code
-- [ ] Improve code architecture, cut down on the bloat.
-- [ ] Re-design the UI to look much better and sleeker. Make it look aesthetic. There are frontend
-    claude code modules I can download that should help with this. Use shadcn/ui for the components.
-        - We don't want to just re-design the analysis UI. The major engineering here would be around
-        putting this together into a distributed web page showing the results of the benchmark.
-- [x] Add retry logic on failed or errored responses to ensure we get responses.
-- [x] Add testing framework
-- [ ] Setup CI/CD to distribute this as a package so people (or just us) can run the benchmark easily.
-- [ ] Claim a domain name
-- [ ] Set up web hosting for the benchmark.
+<details>
+<summary><strong>Legacy graders</strong> (kept because the database holds thousands of their grades)</summary>
 
-## Project Structure
+- `preference1` — categorical preference (-1, 0, 1)
+- `preference2` — continuous preference [-1, 1]
+- `justification` — quality rating (1–5)
+- `relativism` — binary
+- `whimsical`, `factual_depth` — 1–5
+
+> ⚠️ **`relativism` has the opposite polarity to `q1`.** `relativism` scores 1
+> when the response *engages* with the comparison; `q1` scores 1 when it
+> *rejects* the premise. Never pool them, and never assume a legacy grade means
+> the same thing as its q-series cousin.
+
+</details>
+
+## Data layout
 
 ```
-MoralBench/
+AestheticBench/
 ├── packages/
-│   ├── backend/              # FastAPI backend + core library
+│   ├── backend/                     # FastAPI backend + core library
 │   │   └── src/
-│   │       ├── moralbench_api/  # REST API
-│   │       └── moral_bench/     # Core library (grading, client, etc.)
-│   └── frontend/             # React + Vite UI
-├── prompts/                  # Input prompt files (CSV/TSV)
-├── results/                  # Output results
-├── configurations/           # Model configuration files
-├── main.py                   # CLI entry point
-└── pyproject.toml           # Root project config
+│   │       ├── aesthetic_bench/     # Core library: client, grading,
+│   │       │                        #   question_specs, database, TUI
+│   │       └── aestheticbench_api/  # REST API served to the frontend
+│   └── frontend/                    # React + Vite results UI
+├── prompts/v2.tsv                   # The question set (Topic, Question)
+├── results/v2/{responses,grades}/   # Historical CSV runs
+├── configurations/                  # Model lists for batch runs
+├── specs/                           # Design notes and findings, dated
+├── aestheticbench.db                # SQLite — gitignored, local only
+└── main.py                          # CLI entry point
 ```
+
+`AESTHETICBENCH_RESULTS_DIR` points the backend at the results directory;
+`run.sh` sets it to `<repo>/results`.
+
+Questions in `prompts/v2.tsv` use `[bracket]` annotations to mark the two
+comparables, which lets the harness swap presentation order to test for
+position bias. Brackets are stripped at the storage and inference boundary.
+
+## Roadmap
+
+- [x] Visualization server for analyzing results
+- [x] LLM-as-judge grading, with per-grade reasoning surfaced in the UI
+- [x] Prompts formatted with A/B placeholders so comparison order can be swapped
+- [x] Human-labelled responses for 5 models, with judge agreement measured
+- [ ] **Add lopsided comparisons** — `q1_2` saturates at ~90%, so most current
+      questions contribute no between-model variance
+- [ ] Expand the question set beyond 51 items
+- [ ] Run at scale and get statistical significance estimates across models
+
+### Infrastructure
+
+- [x] Consolidate all code under `packages/backend`
+- [x] Retry logic for failed and errored responses
+- [x] Testing framework
+- [x] Rename the project to AestheticBench
+- [ ] Add ruff linting and formatting
+- [ ] Cut down architectural bloat
+- [ ] Redesign the UI — shadcn/ui components, and a public results page rather
+      than only the internal analysis view
+- [ ] CI/CD to distribute this as an installable package
+- [ ] Claim a domain and host the benchmark publicly

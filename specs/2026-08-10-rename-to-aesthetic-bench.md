@@ -1,7 +1,11 @@
 # Rename MoralBench → AestheticBench
 
 **Date:** 2026-08-10
-**Status:** Planned
+**Status:** Executed 2026-08-17. Name confirmed as `AestheticBench`. Sections 4–7 and 9–11
+done in code. **Section 3 (GitHub repo rename, `git remote set-url`, local directory rename)
+and the `mv moralbench.db aestheticbench.db` in section 6 are deliberately NOT done** — both
+act outside git on the shared checkout and must happen when this branch merges, not before.
+See the merge checklist at the end of this file.
 
 The repo no longer measures morality. Every prompt in `prompts/v2.tsv` is an aesthetic
 comparison (`Beauty`, `Language`, …) and every current grader (q1_1 … q4_4) scores whether a
@@ -239,3 +243,46 @@ Small, individually-green commits — this is a wide diff and a bisect target:
   stored grade.
 - Historical result CSVs under `results/` — filenames and contents untouched.
 - The `moral`/`morality` strings inside model responses in `results/` — those are data.
+
+---
+
+## Merge checklist (run in the shared checkout, in this order)
+
+The code rename is committed on `worktree-rename-aesthetic-bench`. These four steps act
+outside git — or on files git does not track — and must run **at merge time**, because until
+the branch lands the shared checkout is still running code that expects the old names.
+
+1. Merge this branch. (It stacks on `over-the-finish-line`, so land that first — PR #14.)
+2. Rename the database. It is gitignored and exists only on this machine:
+   ```
+   cd ~/Documents/ai_projects/MoralBench
+   cp moralbench.db moralbench.db.bak      # keep a backup until step 5 passes
+   mv moralbench.db aestheticbench.db
+   ```
+3. Update `.env.local` (gitignored, so the rename did not touch it):
+   `MORALBENCH_RESULTS_DIR=` → `AESTHETICBENCH_RESULTS_DIR=`. Open a **fresh shell**
+   afterwards — a stale `MORALBENCH_RESULTS_DIR` export makes `_shared.py:11` raise a
+   `KeyError` during test collection rather than a clean error.
+4. Rename the repo and the directory:
+   ```
+   gh repo rename AestheticBench                  # GitHub keeps a redirect from the old URL
+   git remote set-url origin https://github.com/Pchatain/AestheticBench.git
+   cd .. && mv MoralBench AestheticBench
+   ```
+   Then clear the stored output cell in `scripts/analysis.ipynb` that prints the old absolute
+   path, and delete the stale worktree `.claude/worktrees/english-pidgin-prompt`, which holds
+   a full copy of the pre-rename source tree.
+5. Verify: `uv run --env-file .env.local python main.py db grade --dry-run` reports the same
+   response counts as before the move, and `sqlite3 aestheticbench.db ".tables"` still lists
+   `annotations`, `grades`, `questions`, `responses`. Then delete the `.bak`.
+
+## Known-broken before the rename
+
+`npm run build` fails on `over-the-finish-line` with two TypeScript errors that predate this
+work and are untouched by it:
+
+- `src/components/CommandCenter.tsx:679` — TS2322, `unknown` not assignable to `ReactNode`
+- `src/hooks/useLocalStorage.ts:1` — TS6133, `useEffect` imported but never used
+
+Neither file appears in the rename diff. They need a separate fix; the frontend does not
+build until then, on this branch or on `over-the-finish-line`.
