@@ -1,4 +1,4 @@
-"""AestheticBench - Package to measure the morality of LLMs."""
+"""AestheticBench - does a language model commit to an aesthetic judgement, or retreat into relativism?"""
 
 from .client import OpenRouterClient
 from .config import Config

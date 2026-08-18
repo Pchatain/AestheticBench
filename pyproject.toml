@@ -1,7 +1,7 @@
 [project]
 name = "aestheticbench"
 version = "0.1.0"
-description = "Package to measure the morality of LLMs"
+description = "Will a language model commit to an aesthetic judgement, or retreat into relativism?"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

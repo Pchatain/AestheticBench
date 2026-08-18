@@ -18,7 +18,7 @@ Usable from the CLI (`main.py`), the TUI, and scripts.
 | `processor.py` | Batch inference over the question set. |
 | `human_judge_agreement.py` | Cohen's kappa between humans and judges, and judge vs judge. |
 | `annotate_tui.py` | Textual TUI for human annotation. |
-| `csv_cleaner.py`, `text_utils.py`, `errors.py` | Supporting utilities. |
+| `text_utils.py`, `errors.py` | Supporting utilities. |
 
 ## `aestheticbench_api/` — REST layer
 
