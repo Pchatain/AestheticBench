@@ -1,11 +1,12 @@
 # Rename MoralBench → AestheticBench
 
 **Date:** 2026-08-10
-**Status:** Executed 2026-08-17. Name confirmed as `AestheticBench`. Sections 4–7 and 9–11
-done in code. **Section 3 (GitHub repo rename, `git remote set-url`, local directory rename)
-and the `mv moralbench.db aestheticbench.db` in section 6 are deliberately NOT done** — both
-act outside git on the shared checkout and must happen when this branch merges, not before.
-See the merge checklist at the end of this file.
+**Status:** Completed 2026-08-18. Name confirmed as `AestheticBench`. All sections executed,
+including the GitHub repo rename, the local directory rename and the database step. PRs #14
+(prerequisite branch), #15 (rename + README) and #16 (gitignore follow-up) are merged to main.
+
+One deliberate deviation from section 6: the database was **copied, not moved**, at the user's
+request. See the merge checklist below.
 
 The repo no longer measures morality. Every prompt in `prompts/v2.tsv` is an aesthetic
 comparison (`Beauty`, `Language`, …) and every current grader (q1_1 … q4_4) scores whether a
@@ -246,35 +247,37 @@ Small, individually-green commits — this is a wide diff and a bisect target:
 
 ---
 
-## Merge checklist (run in the shared checkout, in this order)
+## Merge checklist — DONE 2026-08-18
 
-The code rename is committed on `worktree-rename-aesthetic-bench`. These four steps act
-outside git — or on files git does not track — and must run **at merge time**, because until
-the branch lands the shared checkout is still running code that expects the old names.
+All executed. Recorded here as what actually happened, not what to do.
 
-1. Merge this branch. (It stacks on `over-the-finish-line`, so land that first — PR #14.)
-2. Rename the database. It is gitignored and exists only on this machine:
+1. ✅ PR #14 (`over-the-finish-line`) merged, then PR #15 (rename) merged to main.
+2. ✅ Database **copied, not moved** — deviation from the original plan, at the user's request:
    ```
-   cd ~/Documents/ai_projects/MoralBench
-   cp moralbench.db moralbench.db.bak      # keep a backup until step 5 passes
-   mv moralbench.db aestheticbench.db
+   sqlite3 moralbench.db ".backup aestheticbench.db"
    ```
-3. Update `.env.local` (gitignored, so the rename did not touch it):
-   `MORALBENCH_RESULTS_DIR=` → `AESTHETICBENCH_RESULTS_DIR=`. Open a **fresh shell**
-   afterwards — a stale `MORALBENCH_RESULTS_DIR` export makes `_shared.py:11` raise a
-   `KeyError` during test collection rather than a clean error.
-4. Rename the repo and the directory:
-   ```
-   gh repo rename AestheticBench                  # GitHub keeps a redirect from the old URL
-   git remote set-url origin https://github.com/Pchatain/AestheticBench.git
-   cd .. && mv MoralBench AestheticBench
-   ```
-   Then clear the stored output cell in `scripts/analysis.ipynb` that prints the old absolute
-   path, and delete the stale worktree `.claude/worktrees/english-pidgin-prompt`, which holds
-   a full copy of the pre-rename source tree.
-5. Verify: `uv run --env-file .env.local python main.py db grade --dry-run` reports the same
-   response counts as before the move, and `sqlite3 aestheticbench.db ".tables"` still lists
-   `annotations`, `grades`, `questions`, `responses`. Then delete the `.bak`.
+   `.backup` rather than `cp` so the snapshot is consistent even under an open connection.
+   Row counts verified identical across all four tables (questions 52, responses 824,
+   grades 5646, annotations 37); `PRAGMA integrity_check` ok on both.
+   **`moralbench.db` is still on disk** as a frozen pre-rename copy. It diverges the moment
+   anything new is graded — never read from it.
+3. ✅ `.env.local` updated to `AESTHETICBENCH_RESULTS_DIR`. Its value was already the relative
+   `./results`, so the directory rename did not invalidate it.
+4. ✅ `gh repo rename AestheticBench` (which updated `origin` automatically), then
+   `mv MoralBench AestheticBench`. `uv sync` afterwards re-pointed the editable install, which
+   still referenced the old absolute path.
+5. ✅ Verified at the new path: 103 tests pass, `aestheticbench_api` imports with 45 routes,
+   `db grade --dry-run` reports the same 2576 pairs as before the move.
+
+Two things the plan did not anticipate:
+
+- **`.gitignore` had to be broadened to `*.db`** (PR #16). The rename changed the entry to
+  `aestheticbench.db`, which left the retained `moralbench.db` untracked and one `git add -A`
+  away from being committed as a 16MB blob.
+- **Stale `.pyc` directories survived the `git mv`.** `packages/backend/src/moral_bench/` and
+  `moralbench_api/` remained on disk holding only bytecode — untracked, so git left them.
+  Removed with `git clean -xdf`; a leftover `__pycache__` can let the old import name keep
+  resolving and hide a missed call site.
 
 ## Known-broken before the rename
 
