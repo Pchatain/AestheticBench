@@ -60,7 +60,7 @@ done
 GRADERS="q1,q2,q3,q4,q4_1,q4_2,q4_3,q4_4"
 
 echo "========================================"
-echo "  MoralBench — Grade All Questions"
+echo "  AestheticBench — Grade All Questions"
 echo "========================================"
 echo ""
 echo "Grader model:  $GRADER_MODEL"

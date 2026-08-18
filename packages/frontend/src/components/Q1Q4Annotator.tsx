@@ -319,7 +319,7 @@ function AnnotationModal({ isOpen, response, onSave, onClose }: AnnotationModalP
 export function Q1Q4Annotator() {
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useLocalStorage<string>(
-    'moralbench-q1q4-selected-model',
+    'aestheticbench-q1q4-selected-model',
     MODELS_WITH_Q1Q4_GRADES[0] // Default to first model with grades
   )
   const [responses, setResponses] = useState<ResponseWithQ1Q4[]>([])

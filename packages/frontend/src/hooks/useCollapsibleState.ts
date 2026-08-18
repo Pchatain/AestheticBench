@@ -11,7 +11,7 @@ export function useCollapsibleState(
   defaultExpanded: boolean = true
 ): [boolean, () => void] {
   const [isExpanded, setIsExpanded] = useLocalStorage<boolean>(
-    `moralbench-collapsible-${id}`,
+    `aestheticbench-collapsible-${id}`,
     defaultExpanded
   )
 

@@ -1,11 +1,11 @@
-"""Centralized error handling and logging for MoralBench."""
+"""Centralized error handling and logging for AestheticBench."""
 
 import logging
 from datetime import datetime
 from pathlib import Path
 
 # Configure logger for parse errors
-parse_logger = logging.getLogger("moralbench.parse_errors")
+parse_logger = logging.getLogger("aestheticbench.parse_errors")
 
 
 def setup_error_logging(log_dir: Path = Path("logs")) -> None:

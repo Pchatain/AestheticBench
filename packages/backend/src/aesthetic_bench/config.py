@@ -1,4 +1,4 @@
-"""Configuration management for MoralBench."""
+"""Configuration management for AestheticBench."""
 
 import os
 from dataclasses import dataclass
@@ -6,12 +6,12 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    """Configuration for MoralBench."""
+    """Configuration for AestheticBench."""
 
     api_key: str
     base_url: str = "https://openrouter.ai/api/v1/chat/completions"
-    http_referer: str = "https://github.com/moralbench"
-    x_title: str = "MoralBench"
+    http_referer: str = "https://github.com/aestheticbench"
+    x_title: str = "AestheticBench"
     health_check_timeout: int = 30
     request_timeout: int = 120
     max_workers: int = 64
@@ -39,14 +39,14 @@ class Config:
             )
 
         # Allow customizing max_workers via environment variable
-        max_workers_str = os.getenv("MORALBENCH_WORKERS", "64")
+        max_workers_str = os.getenv("AESTHETICBENCH_WORKERS", "64")
         try:
             max_workers = int(max_workers_str)
             if max_workers < 0:
-                raise ValueError("MORALBENCH_WORKERS must be >= 0")
+                raise ValueError("AESTHETICBENCH_WORKERS must be >= 0")
         except ValueError as e:
             raise ValueError(
-                f"Invalid MORALBENCH_WORKERS value '{max_workers_str}': {e}"
+                f"Invalid AESTHETICBENCH_WORKERS value '{max_workers_str}': {e}"
             )
 
         return cls(

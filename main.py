@@ -1,4 +1,4 @@
-"""CLI entry point for MoralBench - thin wrapper around backend services."""
+"""CLI entry point for AestheticBench - thin wrapper around backend services."""
 
 import glob as glob_module
 from pathlib import Path
@@ -7,10 +7,10 @@ import typer
 from tqdm import tqdm
 from typing_extensions import Annotated
 
-from moral_bench import Config, OpenRouterClient, PromptProcessor, MoralBenchDB
-from moral_bench.errors import setup_error_logging
-from moral_bench.grading import GradingProcessor, GraderRegistry
-from moral_bench.human_judge_agreement import (
+from aesthetic_bench import Config, OpenRouterClient, PromptProcessor, AestheticBenchDB
+from aesthetic_bench.errors import setup_error_logging
+from aesthetic_bench.grading import GradingProcessor, GraderRegistry
+from aesthetic_bench.human_judge_agreement import (
     load_annotations_from_json,
     compute_agreement,
     compute_q1q4_agreement,
@@ -20,10 +20,10 @@ from moral_bench.human_judge_agreement import (
     create_agreement_plots,
     create_agreement_table,
 )
-from moralbench_api.services.config_service import ConfigService
-from moralbench_api.services.discovery import DiscoveryService
-from moralbench_api.services.estimation import EstimationService
-from moralbench_api.services.scoring import ScoringService
+from aestheticbench_api.services.config_service import ConfigService
+from aestheticbench_api.services.discovery import DiscoveryService
+from aestheticbench_api.services.estimation import EstimationService
+from aestheticbench_api.services.scoring import ScoringService
 
 app = typer.Typer()
 db_app = typer.Typer(help="Database operations")
@@ -337,9 +337,9 @@ def run(
         typer.Option("--dry-run", help="Verify models and show cost estimates"),
     ] = False,
 ):
-    """Run MoralBench morality testing with the specified model(s)."""
+    """Run AestheticBench morality testing with the specified model(s)."""
     print("========================================")
-    print("  MoralBench - LLM Morality Testing")
+    print("  AestheticBench - LLM Morality Testing")
     print("========================================\n")
 
     # Validate mutually exclusive options
@@ -424,7 +424,7 @@ def run(
 def health_check():
     """Run a health check to verify API connectivity and configuration."""
     print("========================================")
-    print("  MoralBench - Health Check")
+    print("  AestheticBench - Health Check")
     print("========================================\n")
 
     try:
@@ -467,7 +467,7 @@ def grade(
 ):
     """Grade model responses using specified grader prompts."""
     print("========================================")
-    print("  MoralBench - Grade Model Responses")
+    print("  AestheticBench - Grade Model Responses")
     print("========================================\n")
 
     custom_prompt = None
@@ -582,7 +582,7 @@ def export_grades(
     import re
 
     print("========================================")
-    print("  MoralBench - Export Grades Summary")
+    print("  AestheticBench - Export Grades Summary")
     print("========================================\n")
 
     rows = []
@@ -662,7 +662,7 @@ def export_stats(
     from collections import Counter
 
     print("========================================")
-    print("  MoralBench - Export Grade Statistics")
+    print("  AestheticBench - Export Grade Statistics")
     print("========================================\n")
 
     model_stats = {}
@@ -762,7 +762,7 @@ def compute_scores(
 ):
     """Compute aggregate scores (mean, median, std dev) per model across Q1-Q4 criteria."""
     print("========================================")
-    print("  MoralBench - Compute Model Scores")
+    print("  AestheticBench - Compute Model Scores")
     print("========================================\n")
 
     if not summary_file.exists():
@@ -800,18 +800,18 @@ def db_import(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
 ):
     """Import questions from a CSV/TSV file into the database."""
     print("========================================")
-    print("  MoralBench - Import Questions")
+    print("  AestheticBench - Import Questions")
     print("========================================\n")
 
     if not file_path.exists():
         print(f"Error: File not found: {file_path}")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     added, total = db.add_questions_from_file(file_path)
     print(f"✓ Imported {added} new questions from {total} total in {file_path}")
     
@@ -824,11 +824,11 @@ def db_stats(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
 ):
     """Show database statistics."""
     print("========================================")
-    print("  MoralBench - Database Stats")
+    print("  AestheticBench - Database Stats")
     print("========================================\n")
 
     if not db_path.exists():
@@ -836,7 +836,7 @@ def db_stats(
         print("Run 'uv run python main.py db import <file>' to create it.")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     stats = db.get_stats()
     
     print(f"Questions:  {stats['questions']}")
@@ -864,7 +864,7 @@ def db_run(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Show what would be processed"),
@@ -872,7 +872,7 @@ def db_run(
 ):
     """Run model inference on questions missing responses."""
     print("========================================")
-    print("  MoralBench - Run Model (Database)")
+    print("  AestheticBench - Run Model (Database)")
     print("========================================\n")
 
     if not db_path.exists():
@@ -880,7 +880,7 @@ def db_run(
         print("Run 'uv run python main.py db import <file>' first.")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     missing = db.get_missing_questions_for_model(model, run_index)
     
     print(f"Model: {model}")
@@ -961,7 +961,7 @@ def db_grade(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Show what would be graded"),
@@ -969,14 +969,14 @@ def db_grade(
 ):
     """Grade responses using specified graders."""
     print("========================================")
-    print("  MoralBench - Grade Responses (Database)")
+    print("  AestheticBench - Grade Responses (Database)")
     print("========================================\n")
 
     if not db_path.exists():
         print(f"Error: Database not found: {db_path}")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     grader_ids = [g.strip() for g in graders.split(",")]
     grader_version = db.get_grader_version()
     
@@ -1094,18 +1094,18 @@ def db_export(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
 ):
     """Export data from database to CSV."""
     print("========================================")
-    print("  MoralBench - Export Data")
+    print("  AestheticBench - Export Data")
     print("========================================\n")
 
     if not db_path.exists():
         print(f"Error: Database not found: {db_path}")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     
     if what == "responses":
         count = db.export_responses_csv(output, model=model)
@@ -1127,18 +1127,18 @@ def db_migrate(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
 ):
     """Migrate existing CSV results into the database."""
     print("========================================")
-    print("  MoralBench - Migrate CSVs to Database")
+    print("  AestheticBench - Migrate CSVs to Database")
     print("========================================\n")
 
     if not results_dir.exists():
         print(f"Error: Directory not found: {results_dir}")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
     print(f"Migrating from {results_dir}...")
     
     stats = db.migrate_from_csv_dir(results_dir)
@@ -1159,7 +1159,7 @@ def db_agreement(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
-    ] = Path("moralbench.db"),
+    ] = Path("aestheticbench.db"),
     load_only: Annotated[
         bool,
         typer.Option("--load-only", help="Only load annotations, don't compute agreement"),
@@ -1183,14 +1183,14 @@ def db_agreement(
 ):
     """Load human annotations and compute agreement with automated grades (Q1-Q4)."""
     print("========================================")
-    print("  MoralBench - Human-Model Agreement")
+    print("  AestheticBench - Human-Model Agreement")
     print("========================================\n")
 
     if not db_path.exists():
         print(f"Error: Database not found: {db_path}")
         raise typer.Exit(code=1)
 
-    db = MoralBenchDB(db_path)
+    db = AestheticBenchDB(db_path)
 
     # Load annotations if JSON path provided
     if json_path:

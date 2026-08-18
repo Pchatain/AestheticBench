@@ -6,7 +6,7 @@
 
 # Application state
 .annotator_state.json
-moralbench.db
+aestheticbench.db
 
 # AI Coding Tools
 .claude

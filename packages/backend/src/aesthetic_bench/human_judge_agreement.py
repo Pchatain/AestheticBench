@@ -1,4 +1,4 @@
-"""Human judge agreement analysis for MoralBench annotations."""
+"""Human judge agreement analysis for AestheticBench annotations."""
 
 import json
 from datetime import datetime
@@ -11,18 +11,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
-from .database import MoralBenchDB
+from .database import AestheticBenchDB
 from .question_specs import SPECS
 
 
-def load_annotations_from_json(json_path: Path, db: MoralBenchDB) -> int:
+def load_annotations_from_json(json_path: Path, db: AestheticBenchDB) -> int:
     """Load annotations from JSON file into database.
     
     Maps result_uid from JSON to response_id in database.
     
     Args:
         json_path: Path to annotations.json file
-        db: MoralBenchDB instance
+        db: AestheticBenchDB instance
         
     Returns:
         Count of loaded annotations
@@ -180,7 +180,7 @@ Q1Q4_SPECS = {
 }
 
 
-def compute_q1q4_agreement(db: MoralBenchDB, valid_only: bool = True) -> dict:
+def compute_q1q4_agreement(db: AestheticBenchDB, valid_only: bool = True) -> dict:
     """Compute Cohen's kappa between human Q1-Q4 annotations and LLM grades.
 
     Unlike compute_agreement, which only covers the legacy preference and
@@ -188,7 +188,7 @@ def compute_q1q4_agreement(db: MoralBenchDB, valid_only: bool = True) -> dict:
     Q4.1-Q4.4 sub-questions.
 
     Args:
-        db: MoralBenchDB instance
+        db: AestheticBenchDB instance
         valid_only: Drop annotations whose response_id points at another model's
             response (the miscsaved legacy import). Defaults to True.
 
@@ -285,7 +285,7 @@ def print_q1q4_agreement_report(agreement: dict) -> None:
     print()
 
 
-def compute_agreement(db: MoralBenchDB) -> dict:
+def compute_agreement(db: AestheticBenchDB) -> dict:
     """Compute Cohen's kappa between human annotations and automated grades.
     
     Compares:
@@ -293,7 +293,7 @@ def compute_agreement(db: MoralBenchDB) -> dict:
     - Human justification_score vs q4 or justification automated grade
     
     Args:
-        db: MoralBenchDB instance
+        db: AestheticBenchDB instance
         
     Returns:
         Dictionary with agreement metrics for each comparison
@@ -444,14 +444,14 @@ def _interpret_kappa(kappa: float) -> str:
         return "Almost perfect agreement"
 
 
-def compute_inter_model_agreement(db: MoralBenchDB, graders: list[str] = None) -> dict:
+def compute_inter_model_agreement(db: AestheticBenchDB, graders: list[str] = None) -> dict:
     """Compute Cohen's kappa between different models' automated grades.
     
     For each pair of models, computes agreement on specified graders
     for questions they both answered.
     
     Args:
-        db: MoralBenchDB instance
+        db: AestheticBenchDB instance
         graders: List of grader IDs to analyze. Defaults to the current q-series.
     
     Returns:

@@ -12,9 +12,9 @@ import pytest
 
 from fastapi.testclient import TestClient
 
-from moral_bench.database import MoralBenchDB
-from moralbench_api.main import app
-from moralbench_api.routes import annotations
+from aesthetic_bench.database import AestheticBenchDB
+from aestheticbench_api.main import app
+from aestheticbench_api.routes import annotations
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def temp_db():
     """Create a temporary database with test data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.db"
-        db = MoralBenchDB(db_path)
+        db = AestheticBenchDB(db_path)
         
         # Add test question
         question_id = db.add_question("Ethics", "Is lying ever justified?")

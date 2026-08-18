@@ -198,7 +198,7 @@ export function Analytics() {
 
   const handleCollapseAll = () => {
     histogramSectionIds.forEach((id) => {
-      window.localStorage.setItem(`moralbench-collapsible-${id}`, JSON.stringify(false))
+      window.localStorage.setItem(`aestheticbench-collapsible-${id}`, JSON.stringify(false))
     })
     // Force re-render by changing a dummy state
     window.location.reload()
@@ -206,7 +206,7 @@ export function Analytics() {
 
   const handleExpandAll = () => {
     histogramSectionIds.forEach((id) => {
-      window.localStorage.setItem(`moralbench-collapsible-${id}`, JSON.stringify(true))
+      window.localStorage.setItem(`aestheticbench-collapsible-${id}`, JSON.stringify(true))
     })
     // Force re-render by changing a dummy state
     window.location.reload()

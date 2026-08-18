@@ -1,4 +1,4 @@
-"""Text utilities for MoralBench prompt processing."""
+"""Text utilities for AestheticBench prompt processing."""
 
 import re
 

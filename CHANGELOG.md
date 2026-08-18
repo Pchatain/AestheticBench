@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-17
+
+### Changed
+- **Renamed the project from MoralBench to AestheticBench.** The benchmark
+  measures whether models commit to aesthetic judgements; the old name described
+  a different project. Entries below this one predate the rename and keep the old
+  identifiers as a record.
+
+  | Old | New |
+  | --- | --- |
+  | `moral_bench` | `aesthetic_bench` |
+  | `moralbench_api` | `aestheticbench_api` |
+  | `moralbench` / `moralbench-api` (distributions) | `aestheticbench` / `aestheticbench-api` |
+  | `moralbench-ui` (npm) | `aestheticbench-ui` |
+  | `MORALBENCH_WORKERS`, `MORALBENCH_RESULTS_DIR` | `AESTHETICBENCH_WORKERS`, `AESTHETICBENCH_RESULTS_DIR` |
+  | `moralbench.db` | `aestheticbench.db` |
+  | `moralbench-*` localStorage keys | `aestheticbench-*` |
+
+  Grader IDs, database columns and stored results are **unchanged** — they
+  describe the measurement, not the product.
+
+### Migration
+- Rename your local database: `mv moralbench.db aestheticbench.db`.
+- Update `MORALBENCH_*` to `AESTHETICBENCH_*` in `.env.local` and any shell
+  profile. `AESTHETICBENCH_RESULTS_DIR` is read at import time, so a stale
+  variable surfaces as a `KeyError` at test collection.
+- Frontend UI state (selected model, collapsed panels) resets once, because the
+  localStorage key prefix changed.
+
+- Rewrote `README.md` around what the benchmark measures, and corrected three
+  stale sections: a results path that did not exist, instructions referencing the
+  removed `prompts/v1.csv`, and stray `droid --resume` lines.
+
 ## 2026-02-08
 
 ### Added

@@ -18,7 +18,7 @@ const pages = [
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   return (
     <aside className="w-64 bg-gray-800 text-white min-h-screen p-4">
-      <h1 className="text-xl font-bold mb-6 px-2">MoralBench</h1>
+      <h1 className="text-xl font-bold mb-6 px-2">AestheticBench</h1>
       <nav>
         <ul className="space-y-1">
           {pages.map((page) => (

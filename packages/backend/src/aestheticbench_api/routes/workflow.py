@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from moral_bench import Config, OpenRouterClient
+from aesthetic_bench import Config, OpenRouterClient
 
 from ..schemas.workflow import (
     CancelResponse,
@@ -39,7 +39,7 @@ router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 # Initialize services
 # Results directory is set by run.sh via environment variable
-RESULTS_PATH = Path(os.environ["MORALBENCH_RESULTS_DIR"])
+RESULTS_PATH = Path(os.environ["AESTHETICBENCH_RESULTS_DIR"])
 PROJECT_ROOT = RESULTS_PATH.parent
 PROMPTS_PATH = PROJECT_ROOT / "prompts"
 # Backend data directory for caching

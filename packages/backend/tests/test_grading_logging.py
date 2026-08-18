@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from moral_bench.grading import (
+from aesthetic_bench.grading import (
     GraderRegistry,
     GradingProcessor,
     Preference1Grader,
@@ -78,7 +78,7 @@ class TestGradingProcessorLogging:
         
         grader = Preference1Grader()
         
-        with patch("moral_bench.grading.log_parse_error") as mock_log:
+        with patch("aesthetic_bench.grading.log_parse_error") as mock_log:
             processor._run_grader(responses, grader, "test-model")
             
             # Should be called multiple times: once per retry + final failure
@@ -106,7 +106,7 @@ class TestGradingProcessorLogging:
         
         grader = Preference1Grader()
         
-        with patch("moral_bench.grading.log_parse_error") as mock_log:
+        with patch("aesthetic_bench.grading.log_parse_error") as mock_log:
             processor._run_grader(responses, grader, "test-model")
             
             mock_log.assert_not_called()
@@ -159,7 +159,7 @@ class TestGradingProcessorLogging:
         
         grader = Preference1Grader()
         
-        with patch("moral_bench.grading.log_parse_error") as mock_log:
+        with patch("aesthetic_bench.grading.log_parse_error") as mock_log:
             processor._run_grader(responses, grader, "test-model")
             
             # Should not log parse error for API failures (those are different)

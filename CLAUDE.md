@@ -10,10 +10,10 @@ uv run --env-file .env.local python main.py db grade ...
 ```
 
 Without `--env-file` the command fails at `Config.from_env()`
-(`packages/backend/src/moral_bench/config.py:34`) with "OPENROUTER_API_KEY not found".
+(`packages/backend/src/aesthetic_bench/config.py:34`) with "OPENROUTER_API_KEY not found".
 
-The backend tests need the same flag — `MORALBENCH_RESULTS_DIR` is read at import
-time in `packages/backend/src/moralbench_api/routes/_shared.py:11`, so a bare
+The backend tests need the same flag — `AESTHETICBENCH_RESULTS_DIR` is read at import
+time in `packages/backend/src/aestheticbench_api/routes/_shared.py:11`, so a bare
 `uv run python -m pytest packages/backend/tests` fails at collection with a KeyError:
 
 ```

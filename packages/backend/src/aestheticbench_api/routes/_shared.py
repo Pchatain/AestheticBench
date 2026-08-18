@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import HTTPException
 
 
-RESULTS_DIR = Path(os.environ["MORALBENCH_RESULTS_DIR"])
+RESULTS_DIR = Path(os.environ["AESTHETICBENCH_RESULTS_DIR"])
 DATA_DIR = RESULTS_DIR / "v2"
 RESPONSES_DIR = DATA_DIR / "responses"
 GRADES_DIR = DATA_DIR / "grades"
@@ -24,8 +24,8 @@ def get_openrouter_headers() -> dict[str, str]:
         )
     return {
         "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://github.com/moralbench",
-        "X-Title": "MoralBench",
+        "HTTP-Referer": "https://github.com/aestheticbench",
+        "X-Title": "AestheticBench",
     }
 
 

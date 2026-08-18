@@ -1,4 +1,4 @@
-"""Prompt processing and CSV handling for MoralBench."""
+"""Prompt processing and CSV handling for AestheticBench."""
 
 import csv
 from datetime import datetime

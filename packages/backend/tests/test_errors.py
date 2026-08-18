@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from moral_bench.errors import log_parse_error, parse_logger, setup_error_logging
+from aesthetic_bench.errors import log_parse_error, parse_logger, setup_error_logging
 
 
 class TestSetupErrorLogging:

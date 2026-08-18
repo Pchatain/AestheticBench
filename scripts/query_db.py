@@ -1,4 +1,4 @@
-"""Sample queries against the MoralBench SQLite database.
+"""Sample queries against the AestheticBench SQLite database.
 
 Usage:
     uv run python scripts/query_db.py
@@ -7,7 +7,7 @@ Usage:
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "moralbench.db"
+DB_PATH = Path(__file__).parent.parent / "aestheticbench.db"
 
 
 def connect():

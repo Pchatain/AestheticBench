@@ -22,10 +22,10 @@ from textual.widgets import (
 )
 from textual.widgets.option_list import Option
 
-from moral_bench.database import MoralBenchDB
-from moral_bench.grader_prompts import DEFAULT_QUESTIONS
+from aesthetic_bench.database import AestheticBenchDB
+from aesthetic_bench.grader_prompts import DEFAULT_QUESTIONS
 
-DB_PATH = Path(__file__).parents[4] / "moralbench.db"
+DB_PATH = Path(__file__).parents[4] / "aestheticbench.db"
 STATE_PATH = DB_PATH.parent / ".annotator_state.json"
 COMMAND_PATH = DB_PATH.parent / ".annotator_commands.json"
 
@@ -314,7 +314,7 @@ class AnnotateTUI(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.db = MoralBenchDB(DB_PATH)
+        self.db = AestheticBenchDB(DB_PATH)
         self.annotator: str = subprocess.run(
             ["whoami"], capture_output=True, text=True
         ).stdout.strip()
