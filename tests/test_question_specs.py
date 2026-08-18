@@ -1,4 +1,4 @@
-"""Keep question_specs.SPECS in step with the grader classes.
+"""Keep rubric.SPECS in step with the grader classes and the prompt files.
 
 The scale of each grader was previously restated in several modules with nothing
 checking they agreed. These tests fail if the canonical table and the grader
@@ -8,6 +8,7 @@ classes drift apart.
 import pytest
 
 from aestheticbench.benchmark.grading import GraderRegistry
+from aestheticbench.benchmark.prompts import available_grader_ids, load_grader_prompt
 from aestheticbench.benchmark.rubric import SPECS, get_spec
 
 
@@ -49,3 +50,14 @@ def test_legacy_relativism_is_the_inverse_of_q1():
 
 def test_unknown_grader_has_no_spec():
     assert get_spec("custom") is None
+
+
+@pytest.mark.parametrize("grader_id", sorted(SPECS))
+def test_every_spec_has_a_prompt_file(grader_id):
+    """prompts/graders/ is data; a spec with no file would fail at grading time."""
+    assert load_grader_prompt(grader_id).strip()
+
+
+def test_every_prompt_file_has_a_spec():
+    """The reverse: a stray file under prompts/graders/ is a grader nobody can run."""
+    assert set(available_grader_ids()) <= set(SPECS)

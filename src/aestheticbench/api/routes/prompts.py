@@ -1,16 +1,14 @@
-"""Routes for grader prompts - single source of truth shared with frontend."""
+"""Serve every grader's prompt text to the UI's Prompts page.
+
+Read straight from prompts/graders/ via the same loader the graders use, so
+what the page shows is what the judge is sent. Current generation first.
+"""
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from aestheticbench.benchmark.prompts import (
-    GRADER_FACTUAL_DEPTH_PROMPT,
-    GRADER_JUSTIFICATION_PROMPT,
-    GRADER_PREFERENCE_PROMPT_1,
-    GRADER_PREFERENCE_PROMPT_2,
-    GRADER_RELATIVISM_PROMPT,
-    GRADER_WHIMSICAL_PROMPT,
-)
+from aestheticbench.benchmark.prompts import load_grader_prompt
+from aestheticbench.benchmark.rubric import CURRENT_GRADER_IDS, LEGACY_GRADER_IDS, SPECS
 
 router = APIRouter(tags=["prompts"])
 
@@ -28,37 +26,14 @@ class GraderPromptsResponse(BaseModel):
 @router.get("/grader-prompts", response_model=GraderPromptsResponse)
 def get_grader_prompts() -> GraderPromptsResponse:
     """Return all grader prompts for display in the UI."""
-    return GraderPromptsResponse(
-        prompts=[
+    prompts = []
+    for grader_id in CURRENT_GRADER_IDS + LEGACY_GRADER_IDS:
+        spec = SPECS[grader_id]
+        prompts.append(
             GraderPrompt(
-                id="preference1",
-                title="Preference 1 (-1, 0, 1)",
-                prompt=GRADER_PREFERENCE_PROMPT_1,
-            ),
-            GraderPrompt(
-                id="preference2",
-                title="Preference 2 (continuous -1 to 1)",
-                prompt=GRADER_PREFERENCE_PROMPT_2,
-            ),
-            GraderPrompt(
-                id="justification",
-                title="Justification (1 to 5) [requires preference1]",
-                prompt=GRADER_JUSTIFICATION_PROMPT,
-            ),
-            GraderPrompt(
-                id="relativism",
-                title="Relativism (0 or 1)",
-                prompt=GRADER_RELATIVISM_PROMPT,
-            ),
-            GraderPrompt(
-                id="whimsical",
-                title="Whimsical Reasoning (1 to 5)",
-                prompt=GRADER_WHIMSICAL_PROMPT,
-            ),
-            GraderPrompt(
-                id="factual_depth",
-                title="Factual Depth (1 to 5)",
-                prompt=GRADER_FACTUAL_DEPTH_PROMPT,
-            ),
-        ]
-    )
+                id=grader_id,
+                title=f"{grader_id} — {spec.name} · {spec.score_hint}",
+                prompt=load_grader_prompt(grader_id),
+            )
+        )
+    return GraderPromptsResponse(prompts=prompts)
