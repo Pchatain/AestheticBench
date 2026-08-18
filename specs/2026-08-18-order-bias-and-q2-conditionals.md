@@ -68,8 +68,11 @@ explanations and the benchmark could not tell them apart:
 once as written, once with the two `[bracketed]` entities swapped — and grading
 both on `q2` alone.
 
-**Design.** 4 subject models x 20 questions x 2 orientations = 160 responses,
-each graded by 2 judges = 320 gradings. No errors in either stage.
+**Design.** 4 subject models x 20 questions x 2 orientations x 3 repeat
+generations = 480 responses, each graded by 2 judges = 960 gradings. No errors
+in any stage. The first-run analysis directly below was written before runs 2
+and 3 existed; the section after it re-reads everything with the noise floor
+measured.
 
 - Subject models, chosen to span the observed commit-vs-hedge range across four
   labs: `x-ai/grok-4.6` (hedges on 8% of questions), `anthropic/claude-opus-4.5`
@@ -141,18 +144,70 @@ than adding up.
 If a pair must be stable under *both* judges to count, only 60% of the 80
 (model, question) pairs qualify. Single-judge stability numbers are optimistic.
 
+### Repeat generations: the noise floor
+
+*Added later the same day.* The single-run result above cannot tell "the swap
+changed the verdict" from "the model is not self-consistent and the swap
+changed nothing". So the same 160 conditions were generated two more times
+(`--runs 2,3`), giving 3 responses per (model, question, orientation) — 480
+responses, 960 gradings, no errors — and the two sources of variance were
+measured with the same statistic: the chance that two independently sampled
+responses disagree.
+
+| comparison | pairs | disagree | sign flip |
+| --- | --- | --- | --- |
+| within one orientation (**noise floor**) | 960 | 23% | 5% |
+| across orientations (noise + order) | 1440 | 27% | 9% |
+| **excess attributable to order** | | **+4%** | **+4%** |
+
+**Most of the instability is noise, not order.** A model asked the identical
+question twice disagrees with itself 23% of the time; swapping the order adds
+only 4 points on top of that. The stability numbers in the single-run report
+(74%, 8% flips) were real, but they were mostly measuring temperature.
+
+**Yet the order effect is unambiguously real, because noise has no direction.**
+Across all 1440 cross-orientation pairs, 125 are sign flips. 124 of them go
+toward the first-printed slot; 1 goes the other way. p ≈ 2e-12. Two-thirds of
+those flips are what noise would produce, but noise would split them ~62/62,
+and they split 124/1. Whatever fraction of the flipping is order-driven, all of
+it points the same direction — first-named wins.
+
+Per model the two effects separate cleanly:
+
+| model | noise | cross | excess | | noise flip | cross flip | excess |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| x-ai/grok-4.6 | 10% | 18% | +8% | | 6% | 12% | +6% |
+| openai/gpt-5.2 | 23% | 27% | +4% | | 5% | 12% | +7% |
+| anthropic/claude-opus-4.5 | 25% | 29% | +4% | | 7% | 8% | +1% |
+| deepseek/deepseek-v3.2 | 35% | 35% | −0% | | 3% | 4% | +1% |
+
+grok-4.6 is by far the most self-consistent (unanimous across all 3 runs on
+85% of conditions) **and** the most order-sensitive (+8% excess). deepseek-v3.2
+is the least self-consistent (49% unanimous, 35% self-disagreement) and shows
+no order effect at all — there is no room for one under that much noise.
+Self-consistency and order-robustness are different axes; a leaderboard
+should score them separately.
+
+Majority-of-3 raises the stable rate from 74% to 78% and leaves the flip count
+at exactly 13/160 — so majority voting removes some hedge-noise but none of the
+order effect. The 13 flips that survive voting still go 13/0 toward the first
+slot.
+
 ### What this means for the benchmark
 
-- **Both orientations should be collected for every question.** A single-order
-  run confounds the model's judgement with the question author's ordering, and
-  8% of committed verdicts are pure slot artefact.
+- **Single-sample verdicts carry ~23% noise on q2.** Any per-model number from
+  one generation has that much slack in it before order or anything else is
+  considered. Three samples per condition is the minimum for a stable verdict.
+- **Both orientations should be collected for every question.** The order
+  effect is small in magnitude (+4%) but perfectly directional (124:1), and it
+  favours whichever entity the question author put first. A single-order run
+  bakes the author's ordering into the model's score.
 - **Report the canonical verdict, not the raw one.** `_canonical()` in the
   script is the conversion; getting its sign backwards turns perfect
   consistency into a 100% flip rate, which is why it is pinned by tests.
-- **Order-stability is a model property worth scoring in its own right.** It
-  separates grok-4.6 and opus-4.5 (stable, occasionally flip) from
-  deepseek-v3.2 and gpt-5.2 (less stable, mostly via hedging) in a way the
-  current rubric does not.
+- **Self-consistency and order-robustness are separate model properties.**
+  grok is high on the first and low on the second; deepseek is the reverse. The
+  current rubric sees neither.
 
 ## Reproducing
 
@@ -161,7 +216,11 @@ uv run --env-file .env.local python scripts/order_bias.py --dry-run
 uv run --env-file .env.local python scripts/order_bias.py --stage collect
 uv run --env-file .env.local python scripts/order_bias.py --stage grade
 uv run --env-file .env.local python scripts/order_bias.py --stage report
+uv run --env-file .env.local python scripts/order_bias.py --stage variance
 ```
+
+`--runs 1,2,3` is the default; `--stage collect` only fetches what is missing,
+so re-running after adding a run index is safe.
 
 Results live in `order_bias_responses` and `order_bias_grades`, deliberately
 **not** in `questions`/`responses`: a reversed question added there would become

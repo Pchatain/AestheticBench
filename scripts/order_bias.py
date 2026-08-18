@@ -109,9 +109,10 @@ CREATE TABLE IF NOT EXISTS order_bias_responses (
     orientation TEXT NOT NULL CHECK (orientation IN ('forward','reversed')),
     prompt_text TEXT NOT NULL,
     model TEXT NOT NULL,
+    run_index INTEGER NOT NULL DEFAULT 1,
     response_text TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(experiment, question_key, model, orientation)
+    UNIQUE(experiment, question_key, model, orientation, run_index)
 );
 CREATE TABLE IF NOT EXISTS order_bias_grades (
     id INTEGER PRIMARY KEY,
@@ -131,8 +132,65 @@ CREATE INDEX IF NOT EXISTS idx_ob_grades_resp ON order_bias_grades(response_id);
 def connect(db_path: Path) -> sqlite3.Connection:
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
+    _migrate_run_index(con)
     con.executescript(SCHEMA)
     return con
+
+
+def _migrate_run_index(con: sqlite3.Connection) -> None:
+    """Add run_index to a table created before repeat generations existed.
+
+    The original UNIQUE(experiment, question_key, model, orientation) makes a
+    second generation collide with the first, and the insert is INSERT OR
+    IGNORE — so without this the extra runs are dropped in silence and the
+    variance report reads a single sample as perfectly self-consistent. SQLite
+    cannot alter a UNIQUE constraint, so the table is rebuilt.
+    """
+    have = con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='order_bias_responses'"
+    ).fetchone()
+    if not have:
+        return
+    cols = {r[1] for r in con.execute("PRAGMA table_info(order_bias_responses)")}
+    if "run_index" in cols:
+        return
+
+    n = con.execute("SELECT count(*) FROM order_bias_responses").fetchone()[0]
+    print(f"  migrating order_bias_responses: adding run_index to {n} existing rows (-> run 1)")
+    con.executescript("""
+        PRAGMA foreign_keys=off;
+        BEGIN;
+        CREATE TABLE order_bias_responses_new (
+            id INTEGER PRIMARY KEY,
+            experiment TEXT NOT NULL,
+            question_key TEXT NOT NULL,
+            topic TEXT,
+            entity_a TEXT NOT NULL,
+            entity_b TEXT NOT NULL,
+            orientation TEXT NOT NULL CHECK (orientation IN ('forward','reversed')),
+            prompt_text TEXT NOT NULL,
+            model TEXT NOT NULL,
+            run_index INTEGER NOT NULL DEFAULT 1,
+            response_text TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(experiment, question_key, model, orientation, run_index)
+        );
+        INSERT INTO order_bias_responses_new
+            (id, experiment, question_key, topic, entity_a, entity_b,
+             orientation, prompt_text, model, run_index, response_text, created_at)
+        SELECT id, experiment, question_key, topic, entity_a, entity_b,
+               orientation, prompt_text, model, 1, response_text, created_at
+        FROM order_bias_responses;
+        DROP TABLE order_bias_responses;
+        ALTER TABLE order_bias_responses_new RENAME TO order_bias_responses;
+        COMMIT;
+        PRAGMA foreign_keys=on;
+    """)
+    # Grades key on response_id, and ids are carried over verbatim above, so the
+    # 320 existing grades stay attached to the responses they were made on.
+    kept = con.execute("SELECT count(*) FROM order_bias_responses").fetchone()[0]
+    assert kept == n, f"migration lost rows: {n} -> {kept}"
+    print(f"  migration ok: {kept} rows, all at run_index=1")
 
 
 # --------------------------------------------------------------------------- #
@@ -185,21 +243,24 @@ def sample_items(items: list[Item], n: int, seed: int) -> list[Item]:
 # --------------------------------------------------------------------------- #
 
 
-def stage_collect(con, items, models, workers, dry_run: bool) -> None:
+def stage_collect(con, items, models, runs, workers, dry_run: bool) -> None:
     todo = []
     for model in models:
         for item in items:
             for orientation in ORIENTATIONS:
-                if _has_response(con, item.key, model, orientation):
-                    continue
-                todo.append((model, item, orientation))
+                for run in runs:
+                    if _has_response(con, item.key, model, orientation, run):
+                        continue
+                    todo.append((model, item, orientation, run))
 
+    planned = len(models) * len(items) * 2 * len(runs)
     print(f"\n[collect] {len(todo)} responses to gather "
-          f"({len(models)} models x {len(items)} questions x 2 orientations, "
-          f"minus {len(models) * len(items) * 2 - len(todo)} already present)")
+          f"({len(models)} models x {len(items)} questions x 2 orientations "
+          f"x {len(runs)} runs = {planned}, "
+          f"minus {planned - len(todo)} already present)")
     if dry_run:
-        for model, item, orientation in todo[:6]:
-            print(f"  {model:32s} {orientation:8s} {item.prompt(orientation)[:60]}")
+        for model, item, orientation, run in todo[:6]:
+            print(f"  run{run} {model:30s} {orientation:8s} {item.prompt(orientation)[:52]}")
         if len(todo) > 6:
             print(f"  ... and {len(todo) - 6} more")
         return
@@ -218,32 +279,32 @@ def stage_collect(con, items, models, workers, dry_run: bool) -> None:
             if not client.verify_model(model, verbose=True):
                 print(f"  x skipping unavailable model: {model}")
                 continue
-            prompts = [item.prompt(orientation) for _, item, orientation in entries]
+            prompts = [item.prompt(orientation) for _, item, orientation, _ in entries]
             print(f"  {model}: {len(prompts)} prompts")
             results = client.batch_chat_completions(prompts, model)
             ok = err = 0
             for idx, _prompt, response in results:
-                _, item, orientation = entries[idx]
+                _, item, orientation, run = entries[idx]
                 if not response:
                     err += 1
                     continue
                 con.execute(
                     "INSERT OR IGNORE INTO order_bias_responses "
                     "(experiment, question_key, topic, entity_a, entity_b, orientation, "
-                    " prompt_text, model, response_text) VALUES (?,?,?,?,?,?,?,?,?)",
+                    " prompt_text, model, run_index, response_text) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (EXPERIMENT, item.key, item.topic, item.entity_a, item.entity_b,
-                     orientation, item.prompt(orientation), model, response),
+                     orientation, item.prompt(orientation), model, run, response),
                 )
                 ok += 1
             con.commit()
             print(f"    ok={ok} errors={err}")
 
 
-def _has_response(con, key: str, model: str, orientation: str) -> bool:
+def _has_response(con, key: str, model: str, orientation: str, run: int) -> bool:
     return con.execute(
         "SELECT 1 FROM order_bias_responses WHERE experiment=? AND question_key=? "
-        "AND model=? AND orientation=?",
-        (EXPERIMENT, key, model, orientation),
+        "AND model=? AND orientation=? AND run_index=?",
+        (EXPERIMENT, key, model, orientation, run),
     ).fetchone() is not None
 
 
@@ -337,10 +398,163 @@ def _binom_p(k: int, n: int) -> float:
     return min(1.0, sum(pmf(i) for i in range(n + 1) if pmf(i) <= obs + 1e-12))
 
 
+def _majority(scores: list[int]) -> int:
+    """The modal score across repeat generations of the same condition.
+
+    Ties are broken toward 0. A 1-1 split between +1 and -1 is exactly the case
+    where the model has no stable view, and calling that ambivalent is both true
+    and the conservative choice — picking a side would manufacture a verdict the
+    samples do not support.
+    """
+    counts = collections.Counter(scores)
+    top = max(counts.values())
+    winners = {s for s, c in counts.items() if c == top}
+    return 0 if len(winners) > 1 else winners.pop()
+
+
+def _disagreement_rate(pairs: list[tuple[int, int]]) -> tuple[float, float]:
+    """(any-disagreement rate, sign-flip rate) over a list of score pairs."""
+    if not pairs:
+        return float("nan"), float("nan")
+    any_d = sum(1 for a, b in pairs if a != b) / len(pairs)
+    flip = sum(1 for a, b in pairs if a != 0 and b != 0 and a != b) / len(pairs)
+    return any_d, flip
+
+
+def stage_variance(con) -> None:
+    """The noise floor, and whether the order effect clears it.
+
+    Without repeat generations the order-bias report cannot distinguish "the
+    swap changed the verdict" from "the model is not self-consistent and the
+    swap changed nothing". This measures both on the same footing: the
+    probability that two independently sampled responses disagree, within one
+    orientation (noise) and across orientations (noise + any order effect).
+    """
+    rows = con.execute(
+        "SELECT g.score, g.grader_model, r.orientation, r.model, r.question_key, r.run_index "
+        "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
+        "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
+    ).fetchall()
+    if not rows:
+        print("\n[variance] nothing graded yet")
+        return
+
+    samples = collections.defaultdict(dict)  # (model,q,judge,orientation) -> {run: score}
+    for r in rows:
+        samples[(r["model"], r["question_key"], r["grader_model"], r["orientation"])][r["run_index"]] = r["score"]
+
+    runs = sorted({r["run_index"] for r in rows})
+    print(f"\n{'=' * 74}\nVARIANCE REPORT  ({EXPERIMENT}, runs={runs})\n{'=' * 74}")
+    n_full = sum(1 for v in samples.values() if len(v) == len(runs))
+    print(f"conditions with all {len(runs)} runs: {n_full} of {len(samples)}")
+    if len(runs) < 2:
+        print("need at least 2 runs to measure variance")
+        return
+
+    # ---- within-orientation: the noise floor ------------------------------ #
+    within = collections.defaultdict(list)
+    for (model, q, judge, orientation), byrun in samples.items():
+        rs = sorted(byrun)
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                within[(model, judge)].append((byrun[rs[i]], byrun[rs[j]]))
+
+    # ---- cross-orientation: noise + any order effect ---------------------- #
+    cross = collections.defaultdict(list)
+    keys = {(m, q, j) for (m, q, j, _o) in samples}
+    for (model, q, judge) in keys:
+        fwd = samples.get((model, q, judge, "forward"), {})
+        rev = samples.get((model, q, judge, "reversed"), {})
+        for rf, sf in fwd.items():
+            for rr, sr in rev.items():
+                cross[(model, judge)].append((_canonical(sf, "forward"), _canonical(sr, "reversed")))
+
+    all_within = [p for v in within.values() for p in v]
+    all_cross = [p for v in cross.values() for p in v]
+    wd, wf = _disagreement_rate(all_within)
+    cd, cf = _disagreement_rate(all_cross)
+
+    print("\n1. IS THE ORDER EFFECT BIGGER THAN THE NOISE?")
+    print("   Both rows are the same statistic: the chance that two independently")
+    print("   sampled responses disagree. Within-orientation is pure generation")
+    print("   noise. Cross-orientation is that noise PLUS any order effect.")
+    print(f"\n   {'comparison':<34}{'pairs':>8}{'disagree':>11}{'sign flip':>12}")
+    print(f"   {'within orientation (noise floor)':<34}{len(all_within):>8}{wd:>10.0%}{wf:>12.0%}")
+    print(f"   {'across orientations':<34}{len(all_cross):>8}{cd:>10.0%}{cf:>12.0%}")
+    print(f"   {'excess attributable to order':<34}{'':>8}{cd - wd:>+10.0%}{cf - wf:>+12.0%}")
+
+    print("\n   by subject model:")
+    print(f"   {'model':<28}{'noise':>9}{'cross':>9}{'excess':>9}"
+          f"{'  |':>3}{'noise flip':>12}{'cross flip':>12}{'excess':>9}")
+    for model in sorted({k[0] for k in within}):
+        w = [p for k, v in within.items() if k[0] == model for p in v]
+        c = [p for k, v in cross.items() if k[0] == model for p in v]
+        wd_, wf_ = _disagreement_rate(w)
+        cd_, cf_ = _disagreement_rate(c)
+        print(f"   {model:<28}{wd_:>8.0%}{cd_:>9.0%}{cd_ - wd_:>+9.0%}"
+              f"{'  |':>3}{wf_:>11.0%}{cf_:>12.0%}{cf_ - wf_:>+9.0%}")
+
+    print("\n   by judge:")
+    print(f"   {'judge':<28}{'noise':>9}{'cross':>9}{'excess':>9}")
+    for judge in sorted({k[1] for k in within}):
+        w = [p for k, v in within.items() if k[1] == judge for p in v]
+        c = [p for k, v in cross.items() if k[1] == judge for p in v]
+        wd_, _ = _disagreement_rate(w)
+        cd_, _ = _disagreement_rate(c)
+        print(f"   {judge:<28}{wd_:>8.0%}{cd_:>9.0%}{cd_ - wd_:>+9.0%}")
+
+    # ---- flip direction, over every cross-orientation pair ----------------- #
+    print("\n   Direction of the cross-orientation sign flips. Noise cannot have a")
+    print("   direction; a slot preference must. This is the test that survives")
+    print("   even when the excess above the noise floor is small.")
+    toward_first = sum(1 for a, b in all_cross if a != 0 and b != 0 and a != b and a == 1)
+    toward_second = sum(1 for a, b in all_cross if a != 0 and b != 0 and a != b and a == -1)
+    n_dir = toward_first + toward_second
+    print(f"   toward FIRST-printed slot : {toward_first}")
+    print(f"   toward SECOND-printed slot: {toward_second}")
+    if n_dir:
+        print(f"   two-sided binomial p      : {_binom_p(toward_first, n_dir):.2e}")
+
+    # ---- self-consistency -------------------------------------------------- #
+    print("\n2. SELF-CONSISTENCY — how often do all runs of one condition agree?")
+    print(f"   {'model':<28}{'conditions':>12}{'unanimous':>12}{'2-1 split':>12}{'3-way':>8}")
+    for model in sorted({k[0] for k in samples}):
+        conds = [v for k, v in samples.items() if k[0] == model and len(v) == len(runs)]
+        if not conds:
+            continue
+        una = sum(1 for v in conds if len(set(v.values())) == 1)
+        three = sum(1 for v in conds if len(set(v.values())) == 3)
+        split = len(conds) - una - three
+        n = len(conds)
+        print(f"   {model:<28}{n:>12}{una / n:>11.0%}{split / n:>12.0%}{three / n:>8.0%}")
+
+    # ---- how much does majority voting change the headline? ---------------- #
+    print("\n3. WHAT THE REPEATS BUY — single run vs majority-of-3 verdicts")
+    for label, pick in (("run 1 only", lambda v: v.get(runs[0])),
+                        ("majority of 3", lambda v: _majority(list(v.values())))):
+        flips = stable = 0
+        for (model, q, judge) in keys:
+            f = samples.get((model, q, judge, "forward"), {})
+            r = samples.get((model, q, judge, "reversed"), {})
+            if not f or not r:
+                continue
+            a, b = pick(f), pick(r)
+            if a is None or b is None:
+                continue
+            ca, cb = _canonical(a, "forward"), _canonical(b, "reversed")
+            if ca == cb:
+                stable += 1
+            elif ca != 0 and cb != 0:
+                flips += 1
+        tot = len(keys)
+        print(f"   {label:<16} stable {stable:>3}/{tot} ({stable / tot:>4.0%})   "
+              f"sign flips {flips:>3}/{tot} ({flips / tot:>4.0%})")
+
+
 def stage_report(con) -> None:
     rows = con.execute(
         "SELECT g.score, g.grader_model, r.orientation, r.model, r.question_key, "
-        "       r.entity_a, r.entity_b, r.topic "
+        "       r.entity_a, r.entity_b, r.topic, r.run_index "
         "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
         "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
     ).fetchall()
@@ -367,12 +581,15 @@ def stage_report(con) -> None:
     # ---- 2. canonical flip rate ------------------------------------------- #
     print("\n2. CANONICAL agreement — does the same entity win in both orientations?")
     print("   Each row is one (model, question, judge) triple graded both ways.")
-    paired = collections.defaultdict(dict)
+    samples = collections.defaultdict(list)   # (model,q,judge,orientation) -> [scores]
     meta = {}
     for r in rows:
-        k = (r["model"], r["question_key"], r["grader_model"])
-        paired[k][r["orientation"]] = r["score"]
-        meta[k] = r
+        samples[(r["model"], r["question_key"], r["grader_model"], r["orientation"])].append(r["score"])
+        meta[(r["model"], r["question_key"], r["grader_model"])] = r
+
+    paired = collections.defaultdict(dict)
+    for (model, q, judge, orientation), scores in samples.items():
+        paired[(model, q, judge)][orientation] = _majority(scores)
     complete = {k: v for k, v in paired.items() if len(v) == 2}
     print(f"   complete pairs: {len(complete)} of {len(paired)}")
 
@@ -453,10 +670,13 @@ def stage_report(con) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", choices=["collect", "grade", "report", "all"], default="all")
+    ap.add_argument("--stage", choices=["collect", "grade", "report", "variance", "all"],
+                    default="all")
     ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
     ap.add_argument("--grader-models", default=",".join(DEFAULT_GRADER_MODELS))
     ap.add_argument("--questions", type=int, default=20)
+    ap.add_argument("--runs", default="1,2,3",
+                    help="Comma-separated run indices to collect (repeat generations)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--db", type=Path, default=REPO_ROOT / "aestheticbench.db")
     ap.add_argument("--prompts", type=Path, default=REPO_ROOT / "prompts" / "v2.tsv")
@@ -465,6 +685,7 @@ def main() -> int:
     args = ap.parse_args()
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
+    runs = [int(r) for r in args.runs.split(",") if r.strip()]
     grader_models = [m.strip() for m in args.grader_models.split(",") if m.strip()]
 
     print("=" * 74)
@@ -475,6 +696,7 @@ def main() -> int:
     print(f"judges        : {', '.join(grader_models)}")
     print(f"grader         : {GRADER_ID} (preference only)")
     print(f"seed          : {args.seed}")
+    print(f"runs          : {runs}")
 
     all_items = load_items(args.prompts)
     items = sample_items(all_items, args.questions, args.seed)
@@ -486,11 +708,13 @@ def main() -> int:
     con = connect(args.db)
     try:
         if args.stage in ("collect", "all"):
-            stage_collect(con, items, models, args.workers, args.dry_run)
+            stage_collect(con, items, models, runs, args.workers, args.dry_run)
         if args.stage in ("grade", "all"):
             stage_grade(con, grader_models, args.workers, args.dry_run)
         if args.stage in ("report", "all") and not args.dry_run:
             stage_report(con)
+        if args.stage in ("variance", "all") and not args.dry_run:
+            stage_variance(con)
     finally:
         con.close()
     return 0

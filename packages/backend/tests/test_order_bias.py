@@ -118,3 +118,126 @@ class TestBinomP:
 
     def test_empty_is_nan(self):
         assert ob._binom_p(0, 0) != ob._binom_p(0, 0)  # nan != nan
+
+
+class TestMajority:
+    """Collapsing repeat generations of one condition into a single verdict."""
+
+    def test_unanimous(self):
+        assert ob._majority([1, 1, 1]) == 1
+        assert ob._majority([-1, -1, -1]) == -1
+        assert ob._majority([0, 0, 0]) == 0
+
+    def test_two_one_split_takes_the_two(self):
+        assert ob._majority([1, 1, 0]) == 1
+        assert ob._majority([-1, -1, 1]) == -1
+        assert ob._majority([0, 0, 1]) == 0
+
+    def test_three_way_split_is_ambivalent(self):
+        assert ob._majority([1, 0, -1]) == 0
+
+    def test_even_split_between_sides_is_ambivalent(self):
+        """A 1-1 split between +1 and -1 is exactly 'no stable view'.
+
+        Picking a side here would manufacture a verdict the samples do not
+        support, and would inflate the stable-commit rate.
+        """
+        assert ob._majority([1, -1]) == 0
+
+    def test_single_sample_passes_through(self):
+        assert ob._majority([1]) == 1
+
+
+class TestDisagreementRate:
+    def test_identical_pairs_never_disagree(self):
+        assert ob._disagreement_rate([(1, 1), (0, 0), (-1, -1)]) == (0.0, 0.0)
+
+    def test_sign_flip_counts_as_both(self):
+        any_d, flip = ob._disagreement_rate([(1, -1)])
+        assert any_d == 1.0 and flip == 1.0
+
+    def test_commit_to_hedge_is_disagreement_but_not_a_flip(self):
+        any_d, flip = ob._disagreement_rate([(1, 0)])
+        assert any_d == 1.0 and flip == 0.0
+
+    def test_empty_is_nan(self):
+        a, f = ob._disagreement_rate([])
+        assert a != a and f != f
+
+
+class TestMigration:
+    """The pre-run_index table must gain the column without losing grades."""
+
+    def _legacy_db(self, path):
+        import sqlite3
+
+        con = sqlite3.connect(path)
+        con.executescript("""
+            CREATE TABLE order_bias_responses (
+                id INTEGER PRIMARY KEY, experiment TEXT NOT NULL,
+                question_key TEXT NOT NULL, topic TEXT,
+                entity_a TEXT NOT NULL, entity_b TEXT NOT NULL,
+                orientation TEXT NOT NULL, prompt_text TEXT NOT NULL,
+                model TEXT NOT NULL, response_text TEXT NOT NULL,
+                created_at TIMESTAMP,
+                UNIQUE(experiment, question_key, model, orientation)
+            );
+            CREATE TABLE order_bias_grades (
+                id INTEGER PRIMARY KEY, response_id INTEGER NOT NULL,
+                grader_id TEXT NOT NULL, grader_model TEXT NOT NULL,
+                score INTEGER NOT NULL, reasoning TEXT, created_at TIMESTAMP,
+                UNIQUE(response_id, grader_id, grader_model)
+            );
+            INSERT INTO order_bias_responses
+                (id, experiment, question_key, entity_a, entity_b, orientation,
+                 prompt_text, model, response_text)
+            VALUES (7,'order-bias-v1','Q','A','B','forward','Q','m','resp');
+            INSERT INTO order_bias_grades
+                (response_id, grader_id, grader_model, score)
+            VALUES (7,'q2','judge',1);
+        """)
+        con.commit()
+        con.close()
+
+    def test_adds_column_and_backfills_run_1(self, tmp_path):
+        db = tmp_path / "legacy.db"
+        self._legacy_db(db)
+        con = ob.connect(db)
+        row = con.execute("SELECT id, run_index FROM order_bias_responses").fetchone()
+        assert (row["id"], row["run_index"]) == (7, 1)
+        con.close()
+
+    def test_grades_stay_attached(self, tmp_path):
+        """Response ids are carried over verbatim, so the join must survive."""
+        db = tmp_path / "legacy.db"
+        self._legacy_db(db)
+        con = ob.connect(db)
+        n = con.execute(
+            "SELECT count(*) FROM order_bias_grades g "
+            "JOIN order_bias_responses r ON r.id = g.response_id"
+        ).fetchone()[0]
+        assert n == 1
+        con.close()
+
+    def test_second_run_is_now_insertable(self, tmp_path):
+        """The whole point: the old UNIQUE silently dropped repeat generations."""
+        db = tmp_path / "legacy.db"
+        self._legacy_db(db)
+        con = ob.connect(db)
+        con.execute(
+            "INSERT OR IGNORE INTO order_bias_responses "
+            "(experiment, question_key, entity_a, entity_b, orientation, "
+            " prompt_text, model, run_index, response_text) "
+            "VALUES ('order-bias-v1','Q','A','B','forward','Q','m',2,'resp2')"
+        )
+        con.commit()
+        assert con.execute("SELECT count(*) FROM order_bias_responses").fetchone()[0] == 2
+        con.close()
+
+    def test_migration_is_idempotent(self, tmp_path):
+        db = tmp_path / "legacy.db"
+        self._legacy_db(db)
+        ob.connect(db).close()
+        con = ob.connect(db)
+        assert con.execute("SELECT count(*) FROM order_bias_responses").fetchone()[0] == 1
+        con.close()
