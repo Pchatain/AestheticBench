@@ -165,7 +165,7 @@ def _parse_in_range(value, allowed: tuple[int, ...]) -> Optional[int]:
     return val if val in allowed else None
 
 
-# Scales come from question_specs.SPECS so they cannot drift from the graders.
+# Scales come from rubric.SPECS so they cannot drift from the graders.
 # q1 needs its own parser because the TUI stores the human answer as "Yes"/"No"
 # text while the grader emits 0/1.
 Q1Q4_SPECS = {

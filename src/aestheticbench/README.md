@@ -1,33 +1,18 @@
-# Backend source
+# `aestheticbench` — the one Python package
 
-Two packages live here, and the split matters.
-
-## `aesthetic_bench/` — core library
-
-Everything that knows how the benchmark works. No web framework, no HTTP layer.
-Usable from the CLI (`main.py`), the TUI, and scripts.
-
-| Module | Responsibility |
+| Directory | Responsibility |
 | --- | --- |
-| `question_specs.py` | **Start here.** Single source of truth for every grader's scale, column name, and generation. |
-| `grader_prompts.py` | Prompt text for each grader. |
-| `grading.py` | Builds grader prompts, parses and validates judge responses. |
-| `client.py` | OpenRouter client, with retries. |
-| `config.py` | Env-driven config (`Config.from_env()`, `AESTHETICBENCH_WORKERS`). |
-| `database.py` | SQLite access — `questions`, `responses`, `grades`, `annotations`. |
-| `processor.py` | Batch inference over the question set. |
-| `human_judge_agreement.py` | Cohen's kappa between humans and judges, and judge vs judge. |
-| `annotate_tui.py` | Textual TUI for human annotation. |
-| `text_utils.py`, `errors.py` | Supporting utilities. |
+| `benchmark/` | Runs the benchmark. `client.py` (OpenRouter, with retries), `config.py`, `run.py` (batch inference over the question set), `grading.py` (builds judge prompts, parses and validates answers), `rubric.py` (**start here** — every grader's scale, column name and generation), `prompts.py` (the only reader of `prompts/graders/`), `agreement.py` (Cohen's kappa, human vs judge and judge vs judge), `text_utils.py`, `errors.py`. |
+| `labelling/` | `tui.py`, the Textual annotation TUI. `make tui`. |
+| `store/` | `database.py` — SQLite: `questions`, `responses`, `grades`, `annotations`. |
+| `api/` | FastAPI app for `web/`: `routes/`, `schemas/`, `services/`. `make backend`. |
+| `cli/` | `main.py`, the `aestheticbench` command (`uv run aestheticbench --help`). |
+| `paths.py` | Every filesystem anchor, resolved once. Nothing else may compute a path from `__file__`. |
 
-## `aestheticbench_api/` — REST layer
-
-FastAPI app serving the React frontend. Routes under `routes/`, request/response
-models under `schemas/`, orchestration under `services/`. It depends on
-`aesthetic_bench`; nothing in `aesthetic_bench` may import from here.
-
-Note that `routes/_shared.py` reads `AESTHETICBENCH_RESULTS_DIR` at **import**
-time, so the variable must be set before the app — or the test suite — loads.
+`api/services/` and the top-level `run`/`grade`/`export-*` CLI commands are the
+older CSV workflow under `results/v2/`; the `db` subcommands and `routes/annotations.py`
+are the current SQLite one. Collapsing to one is the next job
+(`specs/2026-08-18-repo-reorganization-plan.md`, phase 1).
 
 ## Two generations of grader
 
@@ -39,4 +24,4 @@ of their grades.
 They are not interchangeable. `relativism` scores 1 when a response **engages**
 with the comparison; `q1` scores 1 when it **rejects** the premise — opposite
 polarities for a similar-sounding question. Never pool them. See the module
-docstring in `question_specs.py`.
+docstring in `benchmark/rubric.py`.

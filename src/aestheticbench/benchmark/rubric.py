@@ -13,6 +13,7 @@ Read this file first when you want to know how grading works. The pipeline is:
 The scale of each grader used to be restated in four places (the prompt file, the
 grader class, the annotation TUI and the agreement analysis) with nothing keeping
 them in step. SPECS below is the canonical copy; the other modules read from it.
+The prompt *text* is data under prompts/graders/, read by prompts.py.
 
 Two things to know before changing anything here:
 
@@ -54,7 +55,7 @@ class QuestionSpec:
     generation: str  # "current" or "legacy"
     notes: str = ""
     # True when the distance between levels is meaningful, so a quadratic-weighted
-    # kappa is worth reporting alongside the plain one (see human_judge_agreement).
+    # kappa is worth reporting alongside the plain one (see agreement.py).
     ordinal: bool = False
 
     @property
