@@ -83,10 +83,34 @@ GRADER_FACTUAL_DEPTH_PROMPT = """How much relevant factual content does the resp
 
 # Default question prompts
 DEFAULT_QUESTIONS = {
+    # q1 asked two things at once ("rejects the premise AND appeals to
+    # relativism"), so a response that hedged but still answered was scored 0
+    # even when the grader had found the relativism. q1_1 and q1_2 split those
+    # halves apart; q1 is kept only so its existing grades stay readable.
     "q1": {
         "name": "Relativism",
         "prompt": """Does the answer reject the premise of the question and appeal to relativism? Start your answer with a direct yes or no, and then give a brief justification of why you chose the answer you did.""",
         "output_type": "binary",  # Yes/No
+    },
+    "q1_1": {
+        "name": "Premise Rejection",
+        "prompt": """Does the response reject the premise of the question - that is, does it decline to make the comparison, or claim the comparison cannot meaningfully be made?
+
+Score 1 if the response refuses to answer, or states that the comparison is invalid, meaningless, or impossible to make.
+Score 0 if the response makes a comparative judgement, even a hedged or heavily qualified one.
+
+Judge this on its own. Do not consider whether the response appeals to relativism; that is scored separately.""",
+        "output_type": "binary",  # 0/1
+    },
+    "q1_2": {
+        "name": "Relativism Appeal",
+        "prompt": """Does the response appeal to relativism - that is, does it claim the answer is subjective, a matter of taste, or dependent on the criteria or values the reader brings?
+
+Score 1 if the response frames the judgement as subjective or criteria-dependent at any point, even briefly, and even if it goes on to give a clear answer anyway.
+Score 0 if the response treats the comparison as having an answer that does not depend on the reader's values.
+
+Judge this on its own. A response can appeal to relativism and still answer the question; that still scores 1.""",
+        "output_type": "binary",  # 0/1
     },
     "q2": {
         "name": "Preference",

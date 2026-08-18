@@ -30,10 +30,11 @@ STATE_PATH = DB_PATH.parent / ".annotator_state.json"
 COMMAND_PATH = DB_PATH.parent / ".annotator_commands.json"
 
 
-QUESTION_ORDER = ["q1", "q4_1", "q4_2", "q3", "q4_3", "q2", "q4_4", "q4"]
+QUESTION_ORDER = ["q1_1", "q1_2", "q4_1", "q4_2", "q3", "q4_3", "q2", "q4_4", "q4"]
 
 QUESTION_CONFIG = {
-    "q1":  {"name": "Relativism",    "valid": ["yes", "no", "y", "n"], "display": "Yes/No"},
+    "q1_1": {"name": "Premise Rejection", "valid": ["0", "1"], "display": "0/1"},
+    "q1_2": {"name": "Relativism Appeal",  "valid": ["0", "1"], "display": "0/1"},
     "q2":  {"name": "Preference",    "valid": ["-1", "0", "1"],        "display": "-1/0/1"},
     "q3":  {"name": "Evidence",      "valid": ["-1", "0", "1"],        "display": "-1/0/1"},
     "q4":  {"name": "Justification", "valid": ["1", "2", "3", "4", "5"], "display": "1-5"},
@@ -45,7 +46,7 @@ QUESTION_CONFIG = {
 
 # Button label display
 QUESTION_LABELS = {
-    "q1": "Q1", "q2": "Q2", "q3": "Q3", "q4": "Q4",
+    "q1_1": "Q1.1", "q1_2": "Q1.2", "q2": "Q2", "q3": "Q3", "q4": "Q4",
     "q4_1": "Q4.1", "q4_2": "Q4.2", "q4_3": "Q4.3", "q4_4": "Q4.4",
 }
 
@@ -321,7 +322,7 @@ class AnnotateTUI(App):
         self.selected_model: Optional[str] = None
         self.responses: list[dict] = []
         self.current_response_idx: int = 0
-        self.current_question: str = "q1"  # key from QUESTION_ORDER
+        self.current_question: str = QUESTION_ORDER[0]  # key from QUESTION_ORDER
         self.show_unannotated_only: bool = False
         self.llm_reasoning_visible: bool = False
         self.human_scores: dict = {}
@@ -351,7 +352,7 @@ class AnnotateTUI(App):
                     with Horizontal(id="question-nav"):
                         for q in QUESTION_ORDER:
                             yield Button(QUESTION_LABELS[q], id=f"{q}-btn",
-                                         classes="active" if q == "q1" else "")
+                                         classes="active" if q == QUESTION_ORDER[0] else "")
                     with Vertical(id="annotation-panel"):
                         yield Label("", id="question-label")
                         yield Label("", id="llm-grade")
@@ -509,7 +510,7 @@ class AnnotateTUI(App):
             self.query_one("#model-selector").add_class("hidden")
             self.query_one("#annotation-view").remove_class("hidden")
             self.current_response_idx = min(max(response_idx, 0), len(self.responses) - 1)
-            self.current_question = "q1"
+            self.current_question = QUESTION_ORDER[0]
             self._display_current()
             self.query_one("#score-input", Input).focus()
         else:
@@ -600,8 +601,6 @@ class AnnotateTUI(App):
         value = value.strip().lower()
         valid = QUESTION_CONFIG[q_key]["valid"]
         if value in valid:
-            if q_key == "q1":
-                return "Yes" if value in ["yes", "y"] else "No"
             return value
         return None
 
@@ -760,7 +759,7 @@ class AnnotateTUI(App):
             n = int(event.value) - 1  # 1-indexed
             if 0 <= n < len(self.responses):
                 self.current_response_idx = n
-                self.current_question = "q1"
+                self.current_question = QUESTION_ORDER[0]
                 self._display_current()
                 self.query_one("#score-input", Input).focus()
             else:
@@ -771,7 +770,7 @@ class AnnotateTUI(App):
     def action_next_response(self) -> None:
         if self.current_response_idx < len(self.responses) - 1:
             self.current_response_idx += 1
-            self.current_question = "q1"
+            self.current_question = QUESTION_ORDER[0]
             self._display_current()
             self.query_one("#score-input", Input).focus()
         else:
@@ -780,7 +779,7 @@ class AnnotateTUI(App):
     def action_prev_response(self) -> None:
         if self.current_response_idx > 0:
             self.current_response_idx -= 1
-            self.current_question = "q1"
+            self.current_question = QUESTION_ORDER[0]
             self._display_current()
             self.query_one("#score-input", Input).focus()
         else:
@@ -809,7 +808,7 @@ class AnnotateTUI(App):
         self._refresh_responses()
         if self.responses:
             self.current_response_idx = 0
-            self.current_question = "q1"
+            self.current_question = QUESTION_ORDER[0]
             self._display_current()
         else:
             self.notify("No responses match the current filter", severity="warning")

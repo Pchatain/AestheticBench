@@ -13,8 +13,10 @@ from moral_bench.grading import GradingProcessor, GraderRegistry
 from moral_bench.human_judge_agreement import (
     load_annotations_from_json,
     compute_agreement,
+    compute_q1q4_agreement,
     compute_inter_model_agreement,
     print_agreement_report,
+    print_q1q4_agreement_report,
     create_agreement_plots,
     create_agreement_table,
 )
@@ -211,35 +213,40 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
     print("  2. preference2   - Continuous [-1, 1] preference scoring")
     print("  3. justification - Quality of justification (1-5 scale) [requires preference1]")
     print("  4. custom        - Write your own grader prompt")
-    print("  5. q1            - Relativism check (0=no, 1=yes)")
-    print("  6. q2            - Preference (-1, 0, 1)")
-    print("  7. q3            - Evidence evaluation (-1, 0, 1)")
-    print("  8. q4            - Justification quality (1-5)")
-    print("  9. q4_1          - Factual Depth (0/1)")
-    print(" 10. q4_2          - Specificity (0/1)")
-    print(" 11. q4_3          - Synthesis (0/1)")
-    print(" 12. q4_4          - Consistency (0/1)")
+    print("  5. q1_1          - Premise Rejection (0/1)")
+    print("  6. q1_2          - Relativism Appeal (0/1)")
+    print("  7. q2            - Preference (-1, 0, 1)")
+    print("  8. q3            - Evidence evaluation (-1, 0, 1)")
+    print("  9. q4            - Justification quality (1-5)")
+    print(" 10. q4_1          - Factual Depth (0/1)")
+    print(" 11. q4_2          - Specificity (0/1)")
+    print(" 12. q4_3          - Synthesis (0/1)")
+    print(" 13. q4_4          - Consistency (0/1)")
+    print("     q1            - superseded by q1_1/q1_2, still gradable by name")
     print("\nYou can select multiple graders (comma-separated).")
-    print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1,q2,q3,q4'\n")
+    print("Examples: '1,3' or 'preference1,justification' or 'all' or 'q1_1,q1_2,q2'\n")
 
     grader_map = {
         "1": "preference1",
         "2": "preference2",
         "3": "justification",
         "4": "custom",
-        "5": "q1",
-        "6": "q2",
-        "7": "q3",
-        "8": "q4",
-        "9": "q4_1",
-        "10": "q4_2",
-        "11": "q4_3",
-        "12": "q4_4",
+        "5": "q1_1",
+        "6": "q1_2",
+        "7": "q2",
+        "8": "q3",
+        "9": "q4",
+        "10": "q4_1",
+        "11": "q4_2",
+        "12": "q4_3",
+        "13": "q4_4",
         "preference1": "preference1",
         "preference2": "preference2",
         "justification": "justification",
         "custom": "custom",
         "q1": "q1",
+        "q1_1": "q1_1",
+        "q1_2": "q1_2",
         "q2": "q2",
         "q3": "q3",
         "q4": "q4",
@@ -247,7 +254,7 @@ def _select_graders_interactive() -> tuple[list[str], str | None]:
         "q4_2": "q4_2",
         "q4_3": "q4_3",
         "q4_4": "q4_4",
-        "all": ["preference1", "preference2", "justification", "q1", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"],
+        "all": ["preference1", "preference2", "justification", "q1_1", "q1_2", "q2", "q3", "q4", "q4_1", "q4_2", "q4_3", "q4_4"],
     }
 
     selection = typer.prompt("Select graders")
@@ -926,7 +933,7 @@ def db_grade(
     graders: Annotated[
         str,
         typer.Option("--graders", "-g", help="Comma-separated list of graders"),
-    ] = "q1,q2,q3,q4",
+    ] = "q1_1,q1_2,q2,q3,q4",
     grader_model: Annotated[
         str,
         typer.Option("--grader-model", "-m", help="Model to use for grading"),
@@ -935,6 +942,22 @@ def db_grade(
         str,
         typer.Option("--model", help="Only grade responses from this model"),
     ] = None,
+    annotated_only: Annotated[
+        bool,
+        typer.Option("--annotated-only", help="Only grade responses that have a human annotation"),
+    ] = False,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Grade at most this many responses per grader (sampling)"),
+    ] = None,
+    min_question_id: Annotated[
+        int,
+        typer.Option("--min-question-id", help="Only grade responses to questions with id >= this"),
+    ] = None,
+    regrade: Annotated[
+        bool,
+        typer.Option("--regrade", help="Grade responses this grader model has not judged, even if another model has"),
+    ] = False,
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Path to database file"),
@@ -962,11 +985,15 @@ def db_grade(
     print(f"Grader version: {grader_version}")
     if model_filter:
         print(f"Filtering to model: {model_filter}")
+    if annotated_only:
+        print("Filtering to human-annotated responses only")
 
     # Count ungraded for each grader
     total_to_grade = 0
     for grader_id in grader_ids:
-        ungraded = db.get_ungraded_responses(grader_id, model=model_filter)
+        ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
+                                          grader_model=grader_model if regrade else None,
+                                          min_question_id=min_question_id)
         print(f"  {grader_id}: {len(ungraded)} ungraded responses")
         total_to_grade += len(ungraded)
 
@@ -991,7 +1018,9 @@ def db_grade(
 
         for grader_id in grader_ids:
             grader = GraderRegistry.get_grader(grader_id)
-            ungraded = db.get_ungraded_responses(grader_id, model=model_filter)
+            ungraded = db.get_ungraded_responses(grader_id, model=model_filter, annotated_only=annotated_only, limit=limit,
+                                          grader_model=grader_model if regrade else None,
+                                          min_question_id=min_question_id)
             
             if not ungraded:
                 print(f"\n✓ {grader_id}: No responses to grade")
@@ -1011,12 +1040,15 @@ def db_grade(
 
             success_count = 0
             error_count = 0
+            failures = []
             for idx, message, grader_response in tqdm(batch_results, desc=f"  {grader_id}"):
                 response_id = prompts[idx][0]
+                grading_prompt = prompts[idx][1]
                 response, question = ungraded[idx]
-                
+
                 if grader_response is None:
                     error_count += 1
+                    failures.append((response_id, "NO_RESPONSE"))
                     continue
 
                 success, score, reasoning, error_msg = grader.grade(
@@ -1026,13 +1058,23 @@ def db_grade(
                 )
 
                 if success:
-                    db.add_grade(response_id, grader_id, str(score), reasoning, grader_version)
+                    db.add_grade(response_id, grader_id, str(score), reasoning, grader_version,
+                                 grader_model=grader_model, grader_prompt=grading_prompt)
                     success_count += 1
                 else:
-                    db.add_grade(response_id, grader_id, error_msg, "", grader_version)
+                    # Deliberately not written to the database. A failure stored as a
+                    # grade both corrupts the score column and makes the response look
+                    # graded, so get_ungraded_responses would skip it on a re-run.
                     error_count += 1
+                    failures.append((response_id, error_msg))
 
             print(f"  ✓ {grader_id}: Success: {success_count}, Errors: {error_count}")
+            if failures:
+                print(f"    {len(failures)} not stored (re-run to retry):")
+                for response_id, error_msg in failures[:5]:
+                    print(f"      response {response_id}: {error_msg}")
+                if len(failures) > 5:
+                    print(f"      ... and {len(failures) - 5} more")
 
 
 @db_app.command("export")
@@ -1137,7 +1179,7 @@ def db_agreement(
     graders: Annotated[
         str,
         typer.Option("--graders", "-g", help="Comma-separated graders for inter-model analysis"),
-    ] = "q1,q2,q3,q4",
+    ] = "q1_1,q1_2,q2,q3,q4",
 ):
     """Load human annotations and compute agreement with automated grades (Q1-Q4)."""
     print("========================================")
@@ -1164,9 +1206,16 @@ def db_agreement(
         print(f"\nTotal annotations in database: {len(annotations)}")
         raise typer.Exit(code=0)
 
-    # Compute human-model agreement
+    # Compute human-model agreement on the Q1-Q4 questions
+    q1q4_agreement = compute_q1q4_agreement(db)
+    if q1q4_agreement["total_annotations"] > 0:
+        print_q1q4_agreement_report(q1q4_agreement)
+    else:
+        print("No Q1-Q4 human annotations found.\n")
+
+    # Legacy preference/justification agreement
     human_agreement = compute_agreement(db)
-    
+
     if human_agreement["total_annotations"] > 0:
         print_agreement_report(human_agreement)
     else:

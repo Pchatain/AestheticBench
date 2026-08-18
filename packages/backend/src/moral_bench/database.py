@@ -37,6 +37,8 @@ class Grade(BaseModel):
     response_id: int
     grader_id: str
     grader_version: Optional[str] = None
+    grader_model: Optional[str] = None
+    grader_prompt: Optional[str] = None
     score: str
     reasoning: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -54,8 +56,12 @@ class Annotation(BaseModel):
     justification_reasoning: Optional[str] = None
     justification_score: Optional[int] = None
     # Q1-Q4 human annotation fields
-    q1_score: Optional[str] = None  # Yes/No
+    q1_score: Optional[str] = None  # Yes/No - superseded by q1_1/q1_2
     q1_reasoning: Optional[str] = None
+    q1_1_score: Optional[int] = None  # 0/1 - rejects the premise
+    q1_1_reasoning: Optional[str] = None
+    q1_2_score: Optional[int] = None  # 0/1 - appeals to relativism
+    q1_2_reasoning: Optional[str] = None
     q2_score: Optional[int] = None  # -1, 0, 1
     q2_reasoning: Optional[str] = None
     q3_score: Optional[int] = None  # -1, 0, 1
@@ -100,10 +106,16 @@ class MoralBenchDB:
         response_id INTEGER REFERENCES responses(id),
         grader_id TEXT NOT NULL,
         grader_version TEXT,
+        grader_model TEXT,
+        grader_prompt TEXT,
         score TEXT NOT NULL,
         reasoning TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(response_id, grader_id)
+        -- grader_model is part of the key so two grader models can hold
+        -- opinions of the same response. Note SQLite treats NULLs as distinct
+        -- in UNIQUE constraints, so rows predating grader_model can duplicate;
+        -- always pass grader_model when writing.
+        UNIQUE(response_id, grader_id, grader_model)
     );
 
     CREATE INDEX IF NOT EXISTS idx_responses_model ON responses(model);
@@ -123,6 +135,10 @@ class MoralBenchDB:
         justification_score INTEGER,
         q1_score TEXT,
         q1_reasoning TEXT,
+        q1_1_score INTEGER,
+        q1_1_reasoning TEXT,
+        q1_2_score INTEGER,
+        q1_2_reasoning TEXT,
         q2_score INTEGER,
         q2_reasoning TEXT,
         q3_score INTEGER,
@@ -168,6 +184,12 @@ class MoralBenchDB:
             "ALTER TABLE annotations ADD COLUMN q4_3_reasoning TEXT",
             "ALTER TABLE annotations ADD COLUMN q4_4_score INTEGER",
             "ALTER TABLE annotations ADD COLUMN q4_4_reasoning TEXT",
+            "ALTER TABLE grades ADD COLUMN grader_model TEXT",
+            "ALTER TABLE grades ADD COLUMN grader_prompt TEXT",
+            "ALTER TABLE annotations ADD COLUMN q1_1_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q1_1_reasoning TEXT",
+            "ALTER TABLE annotations ADD COLUMN q1_2_score INTEGER",
+            "ALTER TABLE annotations ADD COLUMN q1_2_reasoning TEXT",
         ]
         with self._connect() as conn:
             for sql in new_columns:
@@ -175,6 +197,60 @@ class MoralBenchDB:
                     conn.execute(sql)
                 except sqlite3.OperationalError:
                     pass  # Column already exists
+        self._migrate_grades_unique_key()
+
+    def _migrate_grades_unique_key(self):
+        """Widen the grades unique key to include grader_model.
+
+        Older databases key on (response_id, grader_id) alone, which means a
+        second grader model's opinion silently REPLACEs the first. SQLite cannot
+        alter a constraint, so the table is rebuilt. No rows are dropped: the old
+        key is strictly narrower, so every existing row stays unique under the
+        new one.
+        """
+        with self._connect() as conn:
+            current = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='grades'"
+            ).fetchone()
+            if not current or "grader_model" in current["sql"].split("UNIQUE")[-1]:
+                return  # fresh schema, or already migrated
+
+            before = conn.execute("SELECT COUNT(*) FROM grades").fetchone()[0]
+            conn.executescript(
+                """
+                PRAGMA foreign_keys=off;
+                BEGIN;
+                CREATE TABLE grades_migrated (
+                    id INTEGER PRIMARY KEY,
+                    response_id INTEGER REFERENCES responses(id),
+                    grader_id TEXT NOT NULL,
+                    grader_version TEXT,
+                    grader_model TEXT,
+                    grader_prompt TEXT,
+                    score TEXT NOT NULL,
+                    reasoning TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(response_id, grader_id, grader_model)
+                );
+                INSERT INTO grades_migrated
+                    (id, response_id, grader_id, grader_version, grader_model,
+                     grader_prompt, score, reasoning, created_at)
+                SELECT id, response_id, grader_id, grader_version, grader_model,
+                       grader_prompt, score, reasoning, created_at
+                FROM grades;
+                DROP TABLE grades;
+                ALTER TABLE grades_migrated RENAME TO grades;
+                CREATE INDEX IF NOT EXISTS idx_grades_response ON grades(response_id);
+                CREATE INDEX IF NOT EXISTS idx_grades_grader ON grades(grader_id);
+                COMMIT;
+                PRAGMA foreign_keys=on;
+                """
+            )
+            after = conn.execute("SELECT COUNT(*) FROM grades").fetchone()[0]
+            if before != after:
+                raise RuntimeError(
+                    f"grades migration lost rows: {before} before, {after} after"
+                )
 
     @contextmanager
     def _connect(self):
@@ -366,14 +442,16 @@ class MoralBenchDB:
         score: str,
         reasoning: Optional[str] = None,
         grader_version: Optional[str] = None,
+        grader_model: Optional[str] = None,
+        grader_prompt: Optional[str] = None,
     ) -> int:
         """Add a grade for a response."""
         with self._connect() as conn:
             cursor = conn.execute(
-                """INSERT OR REPLACE INTO grades 
-                   (response_id, grader_id, grader_version, score, reasoning, created_at) 
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (response_id, grader_id, grader_version, score, reasoning, datetime.now()),
+                """INSERT OR REPLACE INTO grades
+                   (response_id, grader_id, grader_version, grader_model, grader_prompt, score, reasoning, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (response_id, grader_id, grader_version, grader_model, grader_prompt, score, reasoning, datetime.now()),
             )
             return cursor.lastrowid
 
@@ -381,14 +459,46 @@ class MoralBenchDB:
         self,
         grader_id: str,
         model: Optional[str] = None,
+        annotated_only: bool = False,
+        limit: Optional[int] = None,
+        grader_model: Optional[str] = None,
+        min_question_id: Optional[int] = None,
     ) -> list[tuple[Response, Question]]:
-        """Get responses that haven't been graded by the specified grader."""
-        conditions = ["NOT EXISTS (SELECT 1 FROM grades g WHERE g.response_id = r.id AND g.grader_id = ?)"]
-        params = [grader_id]
-        
+        """Get responses that haven't been graded by the specified grader.
+
+        Set annotated_only to restrict to responses that carry a human annotation,
+        which is what human/judge agreement analysis needs.
+
+        Pass min_question_id to grade only questions added at or after a given id,
+        which is how newly imported questions get graded without re-sweeping the
+        whole database with a second grader model.
+
+        Pass grader_model to mean "not yet graded by THAT model". Without it a
+        response already graded by any model counts as done, so re-grading the
+        same set with a second grader model would find nothing to do.
+        """
+        if grader_model:
+            conditions = [
+                "NOT EXISTS (SELECT 1 FROM grades g WHERE g.response_id = r.id "
+                "AND g.grader_id = ? AND g.grader_model = ?)"
+            ]
+            params = [grader_id, grader_model]
+        else:
+            conditions = ["NOT EXISTS (SELECT 1 FROM grades g WHERE g.response_id = r.id AND g.grader_id = ?)"]
+            params = [grader_id]
+
         if model:
             conditions.append("r.model = ?")
             params.append(model)
+
+        if min_question_id is not None:
+            conditions.append("r.question_id >= ?")
+            params.append(min_question_id)
+
+        if annotated_only:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM annotations a WHERE a.response_id = r.id AND a.model = r.model)"
+            )
 
         where_clause = " AND ".join(conditions)
         
@@ -398,7 +508,8 @@ class MoralBenchDB:
                     FROM responses r 
                     JOIN questions q ON r.question_id = q.id 
                     WHERE {where_clause}
-                    ORDER BY r.id""",
+                    ORDER BY r.id
+                    {"LIMIT " + str(int(limit)) if limit else ""}""",
                 params,
             )
             results = []
@@ -460,6 +571,10 @@ class MoralBenchDB:
         justification_score: Optional[int] = None,
         q1_score: Optional[str] = None,
         q1_reasoning: Optional[str] = None,
+        q1_1_score: Optional[int] = None,
+        q1_1_reasoning: Optional[str] = None,
+        q1_2_score: Optional[int] = None,
+        q1_2_reasoning: Optional[str] = None,
         q2_score: Optional[int] = None,
         q2_reasoning: Optional[str] = None,
         q3_score: Optional[int] = None,
@@ -484,13 +599,15 @@ class MoralBenchDB:
                 """INSERT OR REPLACE INTO annotations
                    (id, response_id, model, annotator, notes, preference_reasoning, preference_score,
                     justification_reasoning, justification_score,
-                    q1_score, q1_reasoning, q2_score, q2_reasoning,
+                    q1_score, q1_reasoning,
+                    q1_1_score, q1_1_reasoning, q1_2_score, q1_2_reasoning,
+                    q2_score, q2_reasoning,
                     q3_score, q3_reasoning,
                     q4_score, q4_reasoning,
                     q4_1_score, q4_1_reasoning, q4_2_score, q4_2_reasoning,
                     q4_3_score, q4_3_reasoning, q4_4_score, q4_4_reasoning,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     annotation_id,
                     response_id,
@@ -503,6 +620,10 @@ class MoralBenchDB:
                     justification_score,
                     q1_score,
                     q1_reasoning,
+                    q1_1_score,
+                    q1_1_reasoning,
+                    q1_2_score,
+                    q1_2_reasoning,
                     q2_score,
                     q2_reasoning,
                     q3_score,
@@ -548,33 +669,96 @@ class MoralBenchDB:
             )
             return [Annotation(**dict(row)) for row in cursor.fetchall()]
 
-    def get_annotations_with_grades(self) -> list[dict]:
-        """Get annotations joined with their corresponding grades for agreement analysis."""
+    # (grade alias, grader_id, output column) for the agreement join.
+    _AGREEMENT_GRADERS = [
+        ("g_q1", "q1", "q1_score"),
+        ("g_q1_1", "q1_1", "q1_1_score"),
+        ("g_q1_2", "q1_2", "q1_2_score"),
+        ("g_q2", "q2", "q2_score"),
+        ("g_q3", "q3", "q3_score"),
+        ("g_q4", "q4", "q4_score"),
+        ("g_q4_1", "q4_1", "q4_1_score"),
+        ("g_q4_2", "q4_2", "q4_2_score"),
+        ("g_q4_3", "q4_3", "q4_3_score"),
+        ("g_q4_4", "q4_4", "q4_4_score"),
+        ("g_pref1", "preference1", "preference1_score"),
+        ("g_pref2", "preference2", "preference2_score"),
+        ("g_just", "justification", "justification_auto_score"),
+    ]
+
+    def get_annotations_with_grades(
+        self, valid_only: bool = False, grader_model: Optional[str] = None
+    ) -> list[dict]:
+        """Get annotations joined with their corresponding grades for agreement analysis.
+
+        Set valid_only to drop annotations whose response_id points at a different
+        model's response. The pre-Q1-Q4 annotations were imported with
+        response_id = result_uid, which was a per-question index rather than a
+        response id, so their joins land on unrelated responses.
+
+        Since grades are keyed on (response_id, grader_id, grader_model), a
+        response can carry several grader models' opinions. Each join therefore
+        picks exactly one row - the newest, or the newest from grader_model if
+        given - so the result stays one row per annotation rather than
+        multiplying out and double-counting in the agreement statistics.
+        """
+        where = (
+            "WHERE a.model = r.model"
+            if valid_only
+            else "WHERE a.preference_score IS NOT NULL OR a.justification_score IS NOT NULL"
+            " OR a.q1_score IS NOT NULL OR a.q1_1_score IS NOT NULL"
+            " OR a.q1_2_score IS NOT NULL OR a.q2_score IS NOT NULL"
+            " OR a.q3_score IS NOT NULL OR a.q4_score IS NOT NULL"
+        )
+        model_clause = " AND grader_model = ?" if grader_model else ""
+        joins = "\n".join(
+            f"""LEFT JOIN grades {alias} ON {alias}.id = (
+                       SELECT id FROM grades
+                       WHERE response_id = a.response_id AND grader_id = '{gid}'{model_clause}
+                       ORDER BY created_at DESC, id DESC LIMIT 1)"""
+            for alias, gid, _ in self._AGREEMENT_GRADERS
+        )
+        params = [grader_model] * len(self._AGREEMENT_GRADERS) if grader_model else []
+
         with self._connect() as conn:
             cursor = conn.execute(
-                """SELECT 
+                f"""SELECT
                        a.id as annotation_id,
                        a.response_id,
                        a.model,
+                       a.annotator,
+                       a.created_at,
                        a.preference_score as human_preference,
                        a.justification_score as human_justification,
+                       a.q1_score as human_q1,
+                       a.q1_1_score as human_q1_1,
+                       a.q1_2_score as human_q1_2,
+                       a.q2_score as human_q2,
+                       a.q3_score as human_q3,
+                       a.q4_score as human_q4,
+                       a.q4_1_score as human_q4_1,
+                       a.q4_2_score as human_q4_2,
+                       a.q4_3_score as human_q4_3,
+                       a.q4_4_score as human_q4_4,
                        g_q1.score as q1_score,
+                       g_q1_1.score as q1_1_score,
+                       g_q1_2.score as q1_2_score,
                        g_q2.score as q2_score,
                        g_q3.score as q3_score,
                        g_q4.score as q4_score,
+                       g_q4_1.score as q4_1_score,
+                       g_q4_2.score as q4_2_score,
+                       g_q4_3.score as q4_3_score,
+                       g_q4_4.score as q4_4_score,
                        g_pref1.score as preference1_score,
                        g_pref2.score as preference2_score,
                        g_just.score as justification_auto_score
                    FROM annotations a
-                   LEFT JOIN grades g_q1 ON a.response_id = g_q1.response_id AND g_q1.grader_id = 'q1'
-                   LEFT JOIN grades g_q2 ON a.response_id = g_q2.response_id AND g_q2.grader_id = 'q2'
-                   LEFT JOIN grades g_q3 ON a.response_id = g_q3.response_id AND g_q3.grader_id = 'q3'
-                   LEFT JOIN grades g_q4 ON a.response_id = g_q4.response_id AND g_q4.grader_id = 'q4'
-                   LEFT JOIN grades g_pref1 ON a.response_id = g_pref1.response_id AND g_pref1.grader_id = 'preference1'
-                   LEFT JOIN grades g_pref2 ON a.response_id = g_pref2.response_id AND g_pref2.grader_id = 'preference2'
-                   LEFT JOIN grades g_just ON a.response_id = g_just.response_id AND g_just.grader_id = 'justification'
-                   WHERE a.preference_score IS NOT NULL OR a.justification_score IS NOT NULL
-                """
+                   JOIN responses r ON a.response_id = r.id
+                   {joins}
+                   {where}
+                """,
+                params,
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -631,10 +815,18 @@ class MoralBenchDB:
                        a.q4_4_reasoning as human_q4_4_reasoning
                    FROM responses r
                    JOIN questions q ON r.question_id = q.id
-                   LEFT JOIN grades g_q1 ON r.id = g_q1.response_id AND g_q1.grader_id = 'q1'
-                   LEFT JOIN grades g_q2 ON r.id = g_q2.response_id AND g_q2.grader_id = 'q2'
-                   LEFT JOIN grades g_q3 ON r.id = g_q3.response_id AND g_q3.grader_id = 'q3'
-                   LEFT JOIN grades g_q4 ON r.id = g_q4.response_id AND g_q4.grader_id = 'q4'
+                   LEFT JOIN grades g_q1 ON g_q1.id = (
+                       SELECT id FROM grades WHERE response_id = r.id AND grader_id = 'q1'
+                       ORDER BY created_at DESC, id DESC LIMIT 1)
+                   LEFT JOIN grades g_q2 ON g_q2.id = (
+                       SELECT id FROM grades WHERE response_id = r.id AND grader_id = 'q2'
+                       ORDER BY created_at DESC, id DESC LIMIT 1)
+                   LEFT JOIN grades g_q3 ON g_q3.id = (
+                       SELECT id FROM grades WHERE response_id = r.id AND grader_id = 'q3'
+                       ORDER BY created_at DESC, id DESC LIMIT 1)
+                   LEFT JOIN grades g_q4 ON g_q4.id = (
+                       SELECT id FROM grades WHERE response_id = r.id AND grader_id = 'q4'
+                       ORDER BY created_at DESC, id DESC LIMIT 1)
                    LEFT JOIN annotations a ON r.id = a.response_id AND r.model = a.model
                    WHERE {where_clause}
                    ORDER BY r.id

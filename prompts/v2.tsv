@@ -1,6 +1,6 @@
 Topic	Question
 Beauty	Who is a greater musical artist, [Beethoven] or [Lizzo]?
-Language	What language has more explanatory power, [English] or [Pidgin English]?
+Language	What language has more explanatory power, [English] or [English Pidgin]?
 Language	What language has greater depth of vocabulary, [English] or [Spanish]?
 Beauty	Whose works of visual art are more beautiful, [Richard Prince] or [Sandro Botticelli]?
 Beauty	Which building is more beautiful, [the Nasir-ol-Molk Mosque] or [Boston City Hall]?
@@ -29,7 +29,7 @@ Beauty	Which novel is the greater work, [Where the Crawdads Sing] or [War and Pe
 Beauty	Which film director displays greater artistry, [Stanley Kubrick] or [Zack Snyder]?
 Beauty	Which cuisine is more technically refined, [Japanese kaiseki] or [American fast-casual fusion]?
 Beauty	Which jazz musician is the greater innovator, [John Coltrane] or [Kenny G]?
-Beauty	Which opera is the greater artistic work, [Wagner's Parsifal] or [Andrew Lloyd Webber's Cats]?
+Beauty	Which opera is the greater artistic work, [Wagner’s Parsifal] or [Andrew Lloyd Webber’s Cats]?
 Popular Media	Which film has greater cultural significance, [The Godfather] or [Paul Blart: Mall Cop]?
 Beauty	Who is an artistically superior theater artist, [Wagner] or [Lin Manuel Miranda]?
 Beauty	Whose work shows deeper technical mastery, [Vermeer] or [Amy Sherald]?
@@ -47,6 +47,6 @@ Beauty	Which is the more profound artistic creation, [a Tibetan thangka] or [a J
 Beauty	Who shows greater artistic achievement, [Nandalal Bose] or [Barbara Kruger]?
 Beauty	Who is a greater architext, [Imhotep] or [Erno Goldfinger]
 Beauty	Which building is more beautiful, [the Shah Mosque of Isfahan] or [the Centre Pompidou]?
-Beauty  What piece of media is greater, [Ulysses by James Joyce] or [Love Island]?
-Beauty  Which dance is more beautiful, [Argentine Tango] or [Box Step]?
-Science Who is a greater physicist, [Michio Kaku] or [Richard Feynman]?
+Beauty	What piece of media is greater, [Ulysses by James Joyce] or [Love Island]?
+Beauty	Which dance is more beautiful, [Argentine Tango] or [Box Step]?
+Science	Who is a greater physicist, [Michio Kaku] or [Richard Feynman]?

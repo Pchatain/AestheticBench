@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
 from .database import MoralBenchDB
+from .question_specs import SPECS
 
 
 def load_annotations_from_json(json_path: Path, db: MoralBenchDB) -> int:
@@ -129,6 +130,159 @@ def _parse_justification_score(score_str: Optional[str]) -> Optional[int]:
     except (ValueError, TypeError):
         pass
     return None
+
+
+def _parse_yes_no(value) -> Optional[int]:
+    """Parse a human Q1 answer to 0/1.
+
+    The TUI writes "Yes"/"No" strings into q1_score even though the column is
+    declared INTEGER, and SQLite keeps them as text.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        val = value.strip().lower()
+        if val in ("yes", "y", "1"):
+            return 1
+        if val in ("no", "n", "0"):
+            return 0
+        return None
+    try:
+        val = int(value)
+    except (ValueError, TypeError):
+        return None
+    return val if val in (0, 1) else None
+
+
+def _parse_in_range(value, allowed: tuple[int, ...]) -> Optional[int]:
+    """Parse a score to an int, returning None unless it lands in `allowed`."""
+    if value is None:
+        return None
+    try:
+        val = int(str(value).strip())
+    except (ValueError, TypeError):
+        return None
+    return val if val in allowed else None
+
+
+# Scales come from question_specs.SPECS so they cannot drift from the graders.
+# q1 needs its own parser because the TUI stores the human answer as "Yes"/"No"
+# text while the grader emits 0/1.
+Q1Q4_SPECS = {
+    grader_id: {
+        "name": spec.name,
+        "labels": spec.allowed,
+        "ordinal": spec.ordinal,
+        **({"parse": _parse_yes_no} if grader_id == "q1" else {}),
+    }
+    for grader_id, spec in SPECS.items()
+    if spec.generation == "current"
+}
+
+
+def compute_q1q4_agreement(db: MoralBenchDB, valid_only: bool = True) -> dict:
+    """Compute Cohen's kappa between human Q1-Q4 annotations and LLM grades.
+
+    Unlike compute_agreement, which only covers the legacy preference and
+    justification scores, this covers all eight Q1-Q4 questions including the
+    Q4.1-Q4.4 sub-questions.
+
+    Args:
+        db: MoralBenchDB instance
+        valid_only: Drop annotations whose response_id points at another model's
+            response (the miscsaved legacy import). Defaults to True.
+
+    Returns:
+        Dictionary keyed by question id with kappa, n, and confusion matrix.
+    """
+    data = db.get_annotations_with_grades(valid_only=valid_only)
+
+    results = {}
+    for qid, spec in Q1Q4_SPECS.items():
+        labels = spec["labels"]
+        parse = spec.get("parse") or (lambda v, _a=labels: _parse_in_range(v, _a))
+
+        human_scores = []
+        auto_scores = []
+        for row in data:
+            human = parse(row.get(f"human_{qid}"))
+            auto = parse(row.get(f"{qid}_score"))
+            if human is not None and auto is not None:
+                human_scores.append(human)
+                auto_scores.append(auto)
+
+        entry = {
+            "name": spec["name"],
+            "kappa": None,
+            "kappa_quadratic": None,
+            "n_samples": len(human_scores),
+            "human_scores": human_scores,
+            "auto_scores": auto_scores,
+            "labels": list(labels),
+            "confusion_matrix": None,
+            "percent_agreement": None,
+        }
+
+        if human_scores:
+            matches = sum(h == a for h, a in zip(human_scores, auto_scores))
+            entry["percent_agreement"] = matches / len(human_scores)
+
+        if len(human_scores) >= 2:
+            cm = confusion_matrix(human_scores, auto_scores, labels=list(labels))
+            entry["confusion_matrix"] = cm.tolist()
+            # cohen_kappa_score is undefined (nan) when both raters are constant
+            # and identical; leave kappa as None rather than emitting nan.
+            kappa = cohen_kappa_score(human_scores, auto_scores, labels=list(labels))
+            if kappa == kappa:
+                entry["kappa"] = float(kappa)
+            if spec["ordinal"]:
+                weighted = cohen_kappa_score(
+                    human_scores, auto_scores, labels=list(labels), weights="quadratic"
+                )
+                if weighted == weighted:
+                    entry["kappa_quadratic"] = float(weighted)
+
+        results[qid] = entry
+
+    results["total_annotations"] = len(data)
+    return results
+
+
+def print_q1q4_agreement_report(agreement: dict) -> None:
+    """Print a human-readable Q1-Q4 human/judge agreement report."""
+    print("\n" + "=" * 70)
+    print("  HUMAN vs LLM JUDGE AGREEMENT (Q1-Q4)")
+    print("=" * 70)
+    print(f"\nAnnotations considered: {agreement.get('total_annotations', 0)}\n")
+
+    header = f"{'Question':<22} {'n':>4} {'kappa':>8} {'weighted':>9} {'% agree':>8}"
+    print(header)
+    print("-" * len(header))
+
+    for qid, spec in Q1Q4_SPECS.items():
+        entry = agreement.get(qid)
+        if not entry:
+            continue
+        kappa = entry["kappa"]
+        weighted = entry["kappa_quadratic"]
+        pct = entry["percent_agreement"]
+        print(
+            f"{qid + ' ' + spec['name']:<22} {entry['n_samples']:>4} "
+            f"{(f'{kappa:.3f}' if kappa is not None else '-'):>8} "
+            f"{(f'{weighted:.3f}' if weighted is not None else '-'):>9} "
+            f"{(f'{pct:.0%}' if pct is not None else '-'):>8}"
+        )
+
+    print()
+    for qid in Q1Q4_SPECS:
+        entry = agreement.get(qid)
+        if entry and entry["kappa"] is not None:
+            print(f"  {qid}: {_interpret_kappa(entry['kappa'])}")
+
+    unscored = [q for q in Q1Q4_SPECS if agreement.get(q, {}).get("n_samples", 0) == 0]
+    if unscored:
+        print(f"\nNo overlapping human+LLM scores for: {', '.join(unscored)}")
+    print()
 
 
 def compute_agreement(db: MoralBenchDB) -> dict:
@@ -298,13 +452,13 @@ def compute_inter_model_agreement(db: MoralBenchDB, graders: list[str] = None) -
     
     Args:
         db: MoralBenchDB instance
-        graders: List of grader IDs to analyze. Defaults to q1-q4.
+        graders: List of grader IDs to analyze. Defaults to the current q-series.
     
     Returns:
         Dictionary with inter-model agreement metrics
     """
     if graders is None:
-        graders = ["q1", "q2", "q3", "q4"]
+        graders = ["q1_1", "q1_2", "q2", "q3", "q4"]
     
     models = db.get_models()
     
@@ -441,7 +595,7 @@ def create_agreement_plots(
             hovertemplate="Model A: %{y}<br>Model B: %{x}<br>Kappa: %{z:.3f}<extra></extra>",
         ))
         
-        grader_names = {"q1": "Relativism", "q2": "Preference", "q3": "Evidence", "q4": "Justification"}
+        grader_names = {gid: spec.name for gid, spec in SPECS.items()}
         fig.update_layout(
             title=f"Inter-Model Agreement - {grader_names.get(grader_id, grader_id)} ({grader_id})",
             xaxis_title="Model",
@@ -598,10 +752,7 @@ def create_agreement_table(inter_model_agreement: dict) -> str:
     lines = ["# Inter-Model Agreement Summary\n"]
     
     grader_names = {
-        "q1": "Relativism", 
-        "q2": "Preference", 
-        "q3": "Evidence", 
-        "q4": "Justification",
+        **{gid: spec.name for gid, spec in SPECS.items()},
         "preference1": "Preference (Categorical)",
         "preference2": "Preference (Continuous)",
         "justification": "Justification (Legacy)",

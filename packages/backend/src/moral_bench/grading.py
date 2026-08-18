@@ -21,6 +21,7 @@ from .grader_prompts import (
     GRADER_RELATIVISM_PROMPT,
     GRADER_WHIMSICAL_PROMPT,
 )
+from .question_specs import get_spec
 
 
 class Grader(ABC):
@@ -77,7 +78,18 @@ PROMPT: {question}
 RESPONSE: {response}
 
 Provide your evaluation as JSON with this exact format:
-{{"reasoning": "your explanation for the score", "score": <your_score>}}"""
+{{"reasoning": "your explanation for the score", "score": <your_score>}}{self._score_scale_instruction()}"""
+
+    def _score_scale_instruction(self) -> str:
+        """Spell out the valid score values for this grader.
+
+        Without it the grader model has to guess the scale and will sometimes
+        answer 1-5 on a yes/no question, which then fails validation.
+        """
+        spec = get_spec(self.name)
+        if spec is None:
+            return ""
+        return f"\n\nThe score must be {spec.score_hint}."
 
     @abstractmethod
     def parse(self, grader_response: str) -> Optional[Any]:
@@ -112,16 +124,59 @@ Provide your evaluation as JSON with this exact format:
         Returns:
             Tuple of (reasoning, raw_score) or (None, None) if parsing fails
         """
-        try:
-            json_match = re.search(r'\{[^{}]*"reasoning"[^{}]*"score"[^{}]*\}', grader_response, re.DOTALL)
-            if not json_match:
-                json_match = re.search(r'\{[^{}]*"score"[^{}]*"reasoning"[^{}]*\}', grader_response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                return data.get("reasoning", ""), data.get("score")
-        except (json.JSONDecodeError, AttributeError):
-            pass
-        return None, None
+        if not grader_response:
+            return None, None
+
+        # Grader models wrap the object in ```json fences often enough to matter.
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", grader_response.strip())
+
+        # Strict path: brace-match from the first '{' so reasoning containing
+        # braces doesn't truncate the object, then parse properly.
+        start = text.find("{")
+        if start != -1:
+            depth = 0
+            in_string = False
+            escaped = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif ch == "\\":
+                        escaped = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            data = json.loads(text[start : i + 1])
+                        except json.JSONDecodeError:
+                            break
+                        if isinstance(data, dict) and "score" in data:
+                            return data.get("reasoning", ""), data.get("score")
+                        break
+
+        # Lenient path: pull the fields out directly. This survives invalid JSON
+        # escapes (\'), unescaped quotes inside reasoning, and responses cut off
+        # before the closing brace - all of which json.loads rejects outright.
+        score_match = re.search(r'"score"\s*:\s*"?(-?\d+(?:\.\d+)?|yes|no|true|false)"?', text, re.IGNORECASE)
+        if not score_match:
+            return None, None
+
+        reasoning = ""
+        reasoning_match = re.search(
+            r'"reasoning"\s*:\s*"(.*?)"\s*(?:,\s*"score"|\}\s*$)', text, re.DOTALL | re.IGNORECASE
+        )
+        if reasoning_match:
+            reasoning = reasoning_match.group(1).replace('\\"', '"').replace("\\n", "\n").strip()
+
+        return reasoning, score_match.group(1)
 
     def grade(
         self, question: str, response: str, grader_model_response: str
@@ -155,7 +210,9 @@ Provide your evaluation as JSON with this exact format:
                 False,
                 None,
                 "",
-                f"PARSE_ERROR: {grader_model_response[:100]}",
+                # Excerpt is long enough to show the tail of a JSON object, since
+                # the interesting failures are ones cut off before "score".
+                f"PARSE_ERROR (len={len(grader_model_response)}): {grader_model_response[:600]}",
             )
 
         if not self.validate(parsed_score):
@@ -400,7 +457,7 @@ PROMPT: {question}
 RESPONSE: {response}
 
 Provide your evaluation as JSON with this exact format:
-{{"reasoning": "your explanation for the score", "score": <your_score>}}"""
+{{"reasoning": "your explanation for the score", "score": <your_score>}}{self._score_scale_instruction()}"""
 
     def _convert_score(self, raw_score: Any) -> Optional[int]:
         """Convert raw score to int."""
@@ -789,7 +846,7 @@ class Q4JustificationGrader(Grader):
 
 
 class _BinarySubquestionGrader(Grader):
-    """Base grader for Q4 sub-questions (binary 0/1 scoring)."""
+    """Base grader for sub-questions scored 0/1 (the q1_* and q4_* splits)."""
 
     def _convert_score(self, raw_score: Any) -> Optional[int]:
         try:
@@ -820,6 +877,30 @@ class _BinarySubquestionGrader(Grader):
             return int(score) in {0, 1}
         except (ValueError, TypeError):
             return False
+
+
+class Q1_1PremiseRejectionGrader(_BinarySubquestionGrader):
+    """Grader for Q1.1: does the response decline to make the comparison? (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q1_1",
+            prompt_template=DEFAULT_QUESTIONS["q1_1"]["prompt"],
+            column_name="Q1_1_Premise_Rejection_Score",
+            reasoning_column_name="Q1_1_Premise_Rejection_Reasoning",
+        )
+
+
+class Q1_2RelativismAppealGrader(_BinarySubquestionGrader):
+    """Grader for Q1.2: does the response frame the judgement as subjective? (binary 0/1)."""
+
+    def __init__(self):
+        super().__init__(
+            name="q1_2",
+            prompt_template=DEFAULT_QUESTIONS["q1_2"]["prompt"],
+            column_name="Q1_2_Relativism_Appeal_Score",
+            reasoning_column_name="Q1_2_Relativism_Appeal_Reasoning",
+        )
 
 
 class Q4_1FactualDepthGrader(_BinarySubquestionGrader):
@@ -884,6 +965,8 @@ class GraderRegistry:
             "whimsical": WhimsicalGrader(),
             "factual_depth": FactualDepthGrader(),
             "q1": Q1RelativismGrader(),
+            "q1_1": Q1_1PremiseRejectionGrader(),
+            "q1_2": Q1_2RelativismAppealGrader(),
             "q2": Q2PreferenceGrader(),
             "q3": Q3EvidenceGrader(),
             "q4": Q4JustificationGrader(),
@@ -907,7 +990,7 @@ class GraderRegistry:
         return [
             "preference1", "preference2", "justification",
             "relativism", "whimsical", "factual_depth",
-            "q1", "q2", "q3", "q4",
+            "q1", "q1_1", "q1_2", "q2", "q3", "q4",
             "q4_1", "q4_2", "q4_3", "q4_4",
         ]
 

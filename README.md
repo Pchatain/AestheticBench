@@ -1,6 +1,6 @@
 # Introduction
 
-This is a project to measure the morality of LLMs.
+This is a project to measure whether LLMs take an aesthetic preference.
 
 ## Getting Started
 
@@ -129,7 +129,9 @@ After running inference, you can grade the model responses using an LLM-as-judge
 
 Each model response is evaluated on four dimensions:
 
-- **Q1 — Relativism** (Yes/No): Does the response reject the comparison premise by appealing to relativism (e.g., "it's all subjective")?
+- **Q1.1 — Premise Rejection** (0/1): Does the response decline to make the comparison, or claim it cannot meaningfully be made?
+- **Q1.2 — Relativism Appeal** (0/1): Does the response frame the judgement as subjective or criteria-dependent — even briefly, and even if it goes on to answer anyway?
+- ~~**Q1 — Relativism**~~ (superseded): asked whether the response rejects the premise *and* appeals to relativism. Because it was conjunctive, a response that hedged and then answered scored 0 even when the grader had identified the relativism. Split into Q1.1/Q1.2 on 2026-08-09; its grades remain in the database but human Q1 annotations are not comparable to either half.
 - **Q2 — Preference** (-1, 0, 1): Does the response express a clear preference? 1 = favors the first option, -1 = favors the second, 0 = ambivalent.
 - **Q3 — Evidence** (-1, 0, 1): Which side does the evidence presented in the response favor? Note: this treats evidence as an unstated condition — we are not asking the model to explicitly present evidence, but rather inferring which side the evidence in its reply supports.
 - **Q4 — Justification Quality** (1–5): Overall quality of the response's justification on a 1-5 scale.
@@ -140,9 +142,18 @@ Each model response is evaluated on four dimensions:
 
 ### Available Graders
 
+Current generation: `q1_1`, `q1_2`, `q2`, `q3`, `q4`, `q4_1`, `q4_2`, `q4_3`, `q4_4`.
+
+Earlier generation, kept because the database holds thousands of their grades:
+
 - **preference1** - Categorical preference scoring (-1, 0, 1)
 - **preference2** - Continuous preference scoring [-1, 1]
 - **justification** - Quality rating (1-5 scale)
+- **relativism** - Binary, but note the polarity is the *inverse* of q1: 1 means the response engages substantively
+- **whimsical**, **factual_depth** - 1-5 scales
+
+`packages/backend/src/moral_bench/question_specs.py` is the single source of truth for
+every grader's scale, column name and generation. Read it before adding a question.
 
 ### Running Grading
 
@@ -178,7 +189,10 @@ droid --resume ff4f813d-4ec6-4614-a54e-2547191e06d9
     - [x] Update UI to display the reasoning for the grade assigned.
 - [ ] Update prompts to be formatted with A,B placeholders so we can swap order of comparisons.
 - [ ] Create a handful more questions
-- [ ] Label question responses for select 5 models, get LLM judge agreement.
+- [x] Label question responses for select 5 models, get LLM judge agreement. See
+    `specs/2026-08-10-q1-split-and-grader-reliability.md` for results.
+- [ ] Add questions with lopsided comparables — q1_2 saturates at ~90% on the current set,
+    so 38 of 48 questions contribute no variance between models.
 - [ ] Run at scale and get statistical significance estimates for the questions across selected models.
 
 ## Infra TODOs
