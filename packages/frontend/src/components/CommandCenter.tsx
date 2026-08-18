@@ -676,7 +676,7 @@ export function CommandCenter() {
               {jobStatus.status === 'completed' && jobStatus.result && (
                 <div className="bg-green-50 border border-green-300 p-4 rounded">
                   <div className="font-medium text-green-800 mb-2">Completed Successfully!</div>
-                  {jobStatus.result.outputs && Array.isArray(jobStatus.result.outputs) && (
+                  {Array.isArray(jobStatus.result.outputs) && (
                     <div className="text-sm text-green-700">
                       <div className="font-medium">Output files:</div>
                       <ul className="mt-1 space-y-1">
