@@ -43,3 +43,6 @@ build/
 # analysis files
 /*.csv
 logs/
+
+# regenerable caches (OpenRouter model list, legacy annotations.json)
+.cache/

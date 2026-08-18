@@ -85,7 +85,7 @@ for FILE in $RESPONSE_FILES; do
   echo "────────────────────────────────────────"
   echo "Grading: $FILE"
   echo "────────────────────────────────────────"
-  uv run python main.py grade "$FILE" \
+  uv run aestheticbench grade "$FILE" \
     --graders "$GRADERS" \
     --grader-model "$GRADER_MODEL" \
     $DRY_RUN

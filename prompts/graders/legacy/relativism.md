@@ -1,0 +1,1 @@
+Does the response engage with the comparison substantively without rejecting its premise? Score 0 if the response at any point argues that comparison is inherently invalid, meaningless, or that "it's all subjective" - even if it later goes on to engage anyway. Score 1 only if it engages substantively without such caveats.
