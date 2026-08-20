@@ -5,9 +5,7 @@ Usage:
 """
 
 import sqlite3
-from pathlib import Path
-
-DB_PATH = Path(__file__).parent.parent / "aestheticbench.db"
+from aestheticbench.paths import DB_PATH
 
 
 def connect():
@@ -182,7 +180,7 @@ def grade_distribution(grader_id: str = "q2"):
 if __name__ == "__main__":
     if not DB_PATH.exists():
         print(f"Database not found at {DB_PATH}")
-        print("Run 'uv run python main.py db migrate' first to populate it.")
+        print("Run 'uv run aestheticbench db migrate' first to populate it.")
         raise SystemExit(1)
 
     unique_prompts()

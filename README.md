@@ -70,15 +70,15 @@ code calls `load_dotenv`, so **every command that reaches OpenRouter must pass
 uv's `--env-file` flag**:
 
 ```bash
-uv run --env-file .env.local python main.py db grade
+uv run --env-file .env.local aestheticbench db grade
 ```
 
-Without it you get `OPENROUTER_API_KEY not found` from `Config.from_env()`. The
-backend tests need the same flag, because `AESTHETICBENCH_RESULTS_DIR` is read at
-import time and a bare `pytest` fails at collection with a `KeyError`:
+Without it you get `OPENROUTER_API_KEY not found` from `Config.from_env()`.
+The tests need no environment at all:
 
 ```bash
-uv run --env-file .env.local python -m pytest packages/backend/tests
+make test        # uv run python -m pytest tests -q
+make lint        # uvx ruff check src tests scripts
 ```
 
 ## Running the benchmark
@@ -89,14 +89,14 @@ against it directly, so you never have to thread CSV paths through by hand.
 
 ```bash
 # See what would run before spending anything (--model is required)
-uv run --env-file .env.local python main.py db run -m openai/gpt-4o --dry-run
+uv run --env-file .env.local aestheticbench db run -m openai/gpt-4o --dry-run
 
 # Collect responses for every question this model is missing one for
-uv run --env-file .env.local python main.py db run -m openai/gpt-4o
+uv run --env-file .env.local aestheticbench db run -m openai/gpt-4o
 
 # Grade them (default graders: q1_1,q1_2,q2,q3,q4)
-uv run --env-file .env.local python main.py db grade --dry-run
-uv run --env-file .env.local python main.py db grade
+uv run --env-file .env.local aestheticbench db grade --dry-run
+uv run --env-file .env.local aestheticbench db grade
 ```
 
 Pass `-r/--run-index` to `db run` to collect repeat samples from the same model
@@ -122,16 +122,16 @@ models can coexist in the database and be compared against each other.
 
 ```bash
 # default is 64 concurrent requests
-AESTHETICBENCH_WORKERS=5 uv run --env-file .env.local python main.py db run -m openai/gpt-4o
+AESTHETICBENCH_WORKERS=5 uv run --env-file .env.local aestheticbench db run -m openai/gpt-4o
 
 # 0 runs sequentially, with no parallelism
-AESTHETICBENCH_WORKERS=0 uv run --env-file .env.local python main.py db run -m openai/gpt-4o
+AESTHETICBENCH_WORKERS=0 uv run --env-file .env.local aestheticbench db run -m openai/gpt-4o
 ```
 
 ### Human agreement
 
 ```bash
-uv run --env-file .env.local python main.py db agreement --plots
+uv run --env-file .env.local aestheticbench db agreement --plots
 ```
 
 Computes Cohen's kappa between human annotations and judge grades (and between
@@ -140,9 +140,11 @@ judge models), writing Plotly HTML reports.
 ## The rubric
 
 Each response is scored on these dimensions.
-`packages/backend/src/aesthetic_bench/question_specs.py` is the **single source of
-truth** for every grader's scale, column name, and generation — read it before
-adding a question.
+The prompt text sent to the judge is data, one file per grader under
+[`prompts/graders/`](prompts/graders/). The scale each grader scores on — allowed
+values, column name, generation — is
+`src/aestheticbench/benchmark/rubric.py`, the **single source of truth**; read
+it before adding a grader. `tests/test_question_specs.py` keeps the two in step.
 
 | Grader | Scale | Question |
 | --- | --- | --- |
@@ -176,27 +178,32 @@ Q1 annotations are not comparable to either half. Split 2026-08-09.
 
 </details>
 
-## Data layout
+## Repository layout
 
 ```
 AestheticBench/
-├── packages/
-│   ├── backend/                     # FastAPI backend + core library
-│   │   └── src/
-│   │       ├── aesthetic_bench/     # Core library: client, grading,
-│   │       │                        #   question_specs, database, TUI
-│   │       └── aestheticbench_api/  # REST API served to the frontend
-│   └── frontend/                    # React + Vite results UI
-├── prompts/v2.tsv                   # The question set (Topic, Question)
-├── results/v2/{responses,grades}/   # Historical CSV runs
-├── configurations/                  # Model lists for batch runs
-├── specs/                           # Design notes and findings, dated
-├── aestheticbench.db                # SQLite — gitignored, local only
-└── main.py                          # CLI entry point
+├── prompts/                     # everything the benchmark sends, as data
+│   ├── v2.tsv                   #   the question set (Topic, Question)
+│   └── graders/                 #   one .md per grader; legacy/ for the old generation
+├── src/aestheticbench/          # one Python package
+│   ├── benchmark/               #   run the benchmark: client, run, grading, rubric,
+│   │                            #     prompts (loader), agreement (human vs judge kappa)
+│   ├── labelling/               #   the Textual TUI for human annotation
+│   ├── store/                   #   SQLite: questions, responses, grades, annotations
+│   ├── api/                     #   FastAPI app served to web/
+│   ├── cli/                     #   the `aestheticbench` command
+│   └── paths.py                 #   every filesystem anchor, resolved once
+├── web/                         # React + Vite UI: results, analytics, annotator
+├── tests/                       # no network needed
+├── results/v2/{responses,grades}/   # historical CSV runs
+├── configurations/              # model lists for batch runs
+├── specs/                       # design notes and findings, dated
+└── aestheticbench.db            # SQLite — gitignored, local only
 ```
 
-`AESTHETICBENCH_RESULTS_DIR` points the backend at the results directory;
-`run.sh` sets it to `<repo>/results`.
+`paths.py` resolves everything relative to the repo root; `AESTHETICBENCH_RESULTS_DIR`
+and `AESTHETICBENCH_DB` override the two outputs. The CLI is `uv run aestheticbench`
+(or `python -m aestheticbench`); the API is `aestheticbench.api.main:app`.
 
 Questions in `prompts/v2.tsv` use `[bracket]` annotations to mark the two
 comparables, which lets the harness swap presentation order to test for
@@ -216,6 +223,7 @@ position bias. Brackets are stripped at the storage and inference boundary.
 ### Infrastructure
 
 - [x] Consolidate all code under `packages/backend`
+- [x] One package under `src/`, prompts as data under `prompts/`
 - [x] Retry logic for failed and errored responses
 - [x] Testing framework
 - [x] Rename the project to AestheticBench

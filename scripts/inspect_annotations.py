@@ -14,15 +14,10 @@ Usage:
 
 import argparse
 import sqlite3
-import sys
 import textwrap
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "backend" / "src"))
-
-from aesthetic_bench.question_specs import SPECS, get_spec  # noqa: E402
-
-DB_PATH = Path(__file__).parent.parent / "aestheticbench.db"
+from aestheticbench.benchmark.rubric import SPECS, get_spec
+from aestheticbench.paths import DB_PATH
 
 
 def connect():

@@ -6,19 +6,21 @@ always use uv instead of python or pip.
 `load_dotenv`, so any command that hits OpenRouter must load it via uv's `--env-file` flag:
 
 ```
-uv run --env-file .env.local python main.py db grade ...
+uv run --env-file .env.local aestheticbench db grade ...
 ```
 
 Without `--env-file` the command fails at `Config.from_env()`
-(`packages/backend/src/aesthetic_bench/config.py:34`) with "OPENROUTER_API_KEY not found".
+(`src/aestheticbench/benchmark/config.py:34`) with "OPENROUTER_API_KEY not found".
 
-The backend tests need the same flag — `AESTHETICBENCH_RESULTS_DIR` is read at import
-time in `packages/backend/src/aestheticbench_api/routes/_shared.py:11`, so a bare
-`uv run python -m pytest packages/backend/tests` fails at collection with a KeyError:
+The tests need no environment: `make test` (`uv run python -m pytest tests -q`).
 
-```
-uv run --env-file .env.local python -m pytest packages/backend/tests
-```
+## Layout
+
+One package, `src/aestheticbench/`: `benchmark/` (client, run, grading, rubric,
+prompts, agreement), `labelling/` (TUI), `store/` (SQLite), `api/` (FastAPI),
+`cli/`. Prompt text is data under `prompts/graders/`; `paths.py` owns every
+filesystem anchor — never compute a path from `__file__` elsewhere. Frontend is
+`web/`, tests are `tests/`.
 
 ## Git Commits
 

@@ -105,7 +105,7 @@ uv sync
 
 echo ""
 echo "Installing frontend dependencies..."
-cd "$PROJECT_DIR/packages/frontend"
+cd "$PROJECT_DIR/web"
 npm install
 cd "$PROJECT_DIR"
 
@@ -147,14 +147,14 @@ if [[ "$start_ui" =~ ^[Yy]$ ]]; then
         osascript <<EOF
 tell application "Terminal"
     activate
-    do script "cd \"$PROJECT_DIR/packages/backend\" && echo 'Starting Backend Server...' && ./run.sh"
+    do script "cd \"$PROJECT_DIR\" && echo 'Starting Backend Server...' && make backend"
     delay 1
 end tell
 EOF
         echo "Backend server starting at: http://localhost:8000"
         osascript <<EOF
 tell application "Terminal"
-    do script "cd \"$PROJECT_DIR/packages/frontend\" && echo 'Starting Frontend Server...' && npm run dev"
+    do script "cd \"$PROJECT_DIR/web\" && echo 'Starting Frontend Server...' && npm run dev"
 end tell
 EOF
         echo "Frontend server starting at: http://localhost:5173"
@@ -167,16 +167,16 @@ EOF
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         # Linux - try gnome-terminal or xterm
         if command -v gnome-terminal &> /dev/null; then
-            gnome-terminal --tab --title="Backend" -- bash -c "cd '$PROJECT_DIR/packages/backend' && echo 'Starting Backend Server...' && ./run.sh; exec bash"
-            gnome-terminal --tab --title="Frontend" -- bash -c "cd '$PROJECT_DIR/packages/frontend' && echo 'Starting Frontend Server...' && npm run dev; exec bash"
+            gnome-terminal --tab --title="Backend" -- bash -c "cd '$PROJECT_DIR' && echo 'Starting Backend Server...' && make backend; exec bash"
+            gnome-terminal --tab --title="Frontend" -- bash -c "cd '$PROJECT_DIR/web' && echo 'Starting Frontend Server...' && npm run dev; exec bash"
         elif command -v xterm &> /dev/null; then
-            xterm -title "Backend" -e "cd '$PROJECT_DIR/packages/backend' && ./run.sh" &
-            xterm -title "Frontend" -e "cd '$PROJECT_DIR/packages/frontend' && npm run dev" &
+            xterm -title "Backend" -e "cd '$PROJECT_DIR' && make backend" &
+            xterm -title "Frontend" -e "cd '$PROJECT_DIR/web' && npm run dev" &
         else
             echo "Could not detect a supported terminal emulator."
             echo "Please start the servers manually:"
-            echo "  Backend: cd packages/backend && ./run.sh"
-            echo "  Frontend: cd packages/frontend && npm run dev"
+            echo "  Backend: make backend"
+            echo "  Frontend: make frontend"
         fi
         echo ""
         echo "Backend server starting at: http://localhost:8000"
@@ -184,7 +184,7 @@ EOF
     else
         echo "Automatic terminal opening not supported on this OS."
         echo "Please start the servers manually in separate terminals:"
-        echo "  Backend: cd packages/backend && ./run.sh"
-        echo "  Frontend: cd packages/frontend && npm run dev"
+        echo "  Backend: make backend"
+        echo "  Frontend: make frontend"
     fi
 fi
