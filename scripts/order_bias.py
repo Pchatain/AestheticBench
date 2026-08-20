@@ -722,6 +722,71 @@ def stage_grader(con) -> None:
     print("    each side, so some of what is labelled generation is still grader.)")
 
 
+def stage_bounds(con, n_boot: int = 4000, seed: int = DEFAULT_SEED) -> None:
+    """Cluster-bootstrap confidence intervals on the per-model numbers.
+
+    The unit of resampling is the QUESTION, not the grade. The 20 questions are
+    the sample from the population of possible comparisons; every grade inside
+    a question shares that question's quirks (its lopsidedness, how easy it is
+    to hedge on), so treating the 2,880 grades per model as independent would
+    understate the interval severely. Resampling whole questions keeps that
+    correlation intact — each bootstrap draw asks "what if the benchmark had
+    sampled 20 *other* questions like these?", which is the uncertainty a user
+    of the benchmark actually faces.
+
+    Every read is kept (3 runs x 2 orientations x 2 judges x 2 grade rounds),
+    so generation noise, order effects and grader noise are all inside the
+    interval rather than assumed away.
+    """
+    import random as _random
+
+    rows = con.execute(
+        "SELECT g.score sc, r.model m, r.question_key q, r.orientation o "
+        "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
+        "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
+    ).fetchall()
+    if not rows:
+        print("\n[bounds] nothing graded yet")
+        return
+    grades = collections.defaultdict(list)  # (model, question) -> [(score, orientation)]
+    for r in rows:
+        grades[(r["m"], r["q"])].append((r["sc"], r["o"]))
+    models = sorted({m for m, _ in grades})
+    questions = sorted({q for _, q in grades})
+    rng = _random.Random(seed)
+
+    def stats_for(model, qs):
+        ss = [(sc, o) for q in qs for sc, o in grades[(model, q)]]
+        n = len(ss)
+        commit = sum(1 for sc, _ in ss if sc != 0) / n
+        canon = [sc if o == "forward" else -sc for sc, o in ss]
+        return commit, sum(canon) / n
+
+    print(f"\n{'=' * 74}\nERROR BOUNDS  (cluster bootstrap over questions, B={n_boot})\n{'=' * 74}")
+    print(f"reads per model: {sum(len(v) for (m, _), v in grades.items() if m == models[0])} "
+          f"({len(questions)} questions x 2 orientations x 3 runs x 2 judges x 2 rounds)")
+    print(f"\n   {'model':<28}{'commit rate':>18}{'95% CI':>16}{'mean pref':>11}{'95% CI':>18}")
+    for m in models:
+        pt_c, pt_p = stats_for(m, questions)
+        cs, ps = [], []
+        for _ in range(n_boot):
+            draw = [questions[rng.randrange(len(questions))] for _ in questions]
+            c, pr = stats_for(m, draw)
+            cs.append(c)
+            ps.append(pr)
+        cs.sort(); ps.sort()
+        lo, hi = cs[int(0.025 * n_boot)], cs[int(0.975 * n_boot)]
+        plo, phi = ps[int(0.025 * n_boot)], ps[int(0.975 * n_boot)]
+        print(f"   {m:<28}{pt_c:>17.0%} {'':>2}[{lo:>4.0%},{hi:>4.0%}]"
+              f"{pt_p:>+11.2f}  [{plo:>+.2f},{phi:>+.2f}]")
+    print("\n   commit rate: share of reads with q2 != 0. mean pref: canonical score")
+    print("   (+1 = entity named first in the TSV as written), averaged over reads —")
+    print("   near 0 means orientation-balanced judgements, not indifference.")
+    print("\n   Repeated reads help — going from 1 read to all 24 per question cuts")
+    print("   the CI width by roughly a third — but a floor remains that only more")
+    print("   QUESTIONS can remove: with n=20 the question draw dominates the interval.")
+
+
 def stage_report(con) -> None:
     rows = con.execute(
         "SELECT g.score, g.grader_model, r.orientation, r.model, r.question_key, "
@@ -841,7 +906,7 @@ def stage_report(con) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", choices=["collect", "grade", "report", "variance", "grader", "all"],
+    ap.add_argument("--stage", choices=["collect", "grade", "report", "variance", "grader", "bounds", "all"],
                     default="all")
     ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
     ap.add_argument("--grader-models", default=",".join(DEFAULT_GRADER_MODELS))
@@ -891,6 +956,8 @@ def main() -> int:
             stage_variance(con)
         if args.stage == "grader" and not args.dry_run:
             stage_grader(con)
+        if args.stage == "bounds" and not args.dry_run:
+            stage_bounds(con, seed=args.seed)
     finally:
         con.close()
     return 0
