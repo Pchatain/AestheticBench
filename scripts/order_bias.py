@@ -43,12 +43,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "packages" / "backend" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from aesthetic_bench.client import OpenRouterClient  # noqa: E402
-from aesthetic_bench.config import Config  # noqa: E402
-from aesthetic_bench.grading import GraderRegistry  # noqa: E402
-from aesthetic_bench.text_utils import strip_entity_brackets, swap_entities  # noqa: E402
+from aestheticbench.benchmark.client import OpenRouterClient  # noqa: E402
+from aestheticbench.benchmark.config import Config  # noqa: E402
+from aestheticbench.benchmark.grading import GraderRegistry  # noqa: E402
+from aestheticbench.benchmark.text_utils import strip_entity_brackets, swap_entities  # noqa: E402
 
 # The four subject models, chosen to span the observed commit-vs-hedge range on
 # the existing q2 grades (grok-4.6 hedges on 8% of questions, deepseek-v3.2 on
