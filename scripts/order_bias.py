@@ -119,10 +119,11 @@ CREATE TABLE IF NOT EXISTS order_bias_grades (
     response_id INTEGER NOT NULL REFERENCES order_bias_responses(id),
     grader_id TEXT NOT NULL,
     grader_model TEXT NOT NULL,
+    grade_round INTEGER NOT NULL DEFAULT 1,
     score INTEGER NOT NULL,
     reasoning TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(response_id, grader_id, grader_model)
+    UNIQUE(response_id, grader_id, grader_model, grade_round)
 );
 CREATE INDEX IF NOT EXISTS idx_ob_resp_model ON order_bias_responses(model);
 CREATE INDEX IF NOT EXISTS idx_ob_grades_resp ON order_bias_grades(response_id);
@@ -133,8 +134,53 @@ def connect(db_path: Path) -> sqlite3.Connection:
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     _migrate_run_index(con)
+    _migrate_grade_round(con)
     con.executescript(SCHEMA)
     return con
+
+
+def _migrate_grade_round(con: sqlite3.Connection) -> None:
+    """Add grade_round to a grades table created before re-grading existed.
+
+    Same failure mode as the responses migration: the old UNIQUE makes a second
+    grading of the same response by the same judge collide with the first, and
+    INSERT OR IGNORE drops it in silence — so a repeatability study would
+    read one grading as two perfectly-agreeing ones.
+    """
+    have = con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='order_bias_grades'"
+    ).fetchone()
+    if not have:
+        return
+    cols = {r[1] for r in con.execute("PRAGMA table_info(order_bias_grades)")}
+    if "grade_round" in cols:
+        return
+    n = con.execute("SELECT count(*) FROM order_bias_grades").fetchone()[0]
+    print(f"  migrating order_bias_grades: adding grade_round to {n} existing rows (-> round 1)")
+    con.executescript("""
+        BEGIN;
+        CREATE TABLE order_bias_grades_new (
+            id INTEGER PRIMARY KEY,
+            response_id INTEGER NOT NULL REFERENCES order_bias_responses(id),
+            grader_id TEXT NOT NULL,
+            grader_model TEXT NOT NULL,
+            grade_round INTEGER NOT NULL DEFAULT 1,
+            score INTEGER NOT NULL,
+            reasoning TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(response_id, grader_id, grader_model, grade_round)
+        );
+        INSERT INTO order_bias_grades_new
+            (id, response_id, grader_id, grader_model, grade_round, score, reasoning, created_at)
+        SELECT id, response_id, grader_id, grader_model, 1, score, reasoning, created_at
+        FROM order_bias_grades;
+        DROP TABLE order_bias_grades;
+        ALTER TABLE order_bias_grades_new RENAME TO order_bias_grades;
+        COMMIT;
+    """)
+    kept = con.execute("SELECT count(*) FROM order_bias_grades").fetchone()[0]
+    assert kept == n, f"migration lost rows: {n} -> {kept}"
+    print(f"  migration ok: {kept} rows, all at grade_round=1")
 
 
 def _migrate_run_index(con: sqlite3.Connection) -> None:
@@ -313,7 +359,7 @@ def _has_response(con, key: str, model: str, orientation: str, run: int) -> bool
 # --------------------------------------------------------------------------- #
 
 
-def stage_grade(con, grader_models, workers, dry_run: bool) -> None:
+def stage_grade(con, grader_models, grade_round, workers, dry_run: bool) -> None:
     grader = GraderRegistry.get_grader(GRADER_ID)
     rows = con.execute(
         "SELECT * FROM order_bias_responses WHERE experiment=?", (EXPERIMENT,)
@@ -324,14 +370,14 @@ def stage_grade(con, grader_models, workers, dry_run: bool) -> None:
         for row in rows:
             done = con.execute(
                 "SELECT 1 FROM order_bias_grades WHERE response_id=? AND grader_id=? "
-                "AND grader_model=?", (row["id"], GRADER_ID, gm),
+                "AND grader_model=? AND grade_round=?", (row["id"], GRADER_ID, gm, grade_round),
             ).fetchone()
             if not done:
                 plan.append((gm, row))
 
     print(f"\n[grade] {len(plan)} gradings to run "
           f"({len(rows)} responses x {len(grader_models)} judges, "
-          f"grader_id={GRADER_ID!r} only)")
+          f"grader_id={GRADER_ID!r}, grade_round={grade_round})")
     if dry_run or not plan:
         return
 
@@ -364,8 +410,9 @@ def stage_grade(con, grader_models, workers, dry_run: bool) -> None:
                     continue
                 con.execute(
                     "INSERT OR IGNORE INTO order_bias_grades "
-                    "(response_id, grader_id, grader_model, score, reasoning) VALUES (?,?,?,?,?)",
-                    (row["id"], GRADER_ID, gm, int(score), reasoning),
+                    "(response_id, grader_id, grader_model, grade_round, score, reasoning) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (row["id"], GRADER_ID, gm, grade_round, int(score), reasoning),
                 )
                 ok += 1
             con.commit()
@@ -433,7 +480,7 @@ def stage_variance(con) -> None:
     rows = con.execute(
         "SELECT g.score, g.grader_model, r.orientation, r.model, r.question_key, r.run_index "
         "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
-        "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
+        "WHERE r.experiment=? AND g.grader_id=? AND g.grade_round=1", (EXPERIMENT, GRADER_ID),
     ).fetchall()
     if not rows:
         print("\n[variance] nothing graded yet")
@@ -551,12 +598,136 @@ def stage_variance(con) -> None:
               f"sign flips {flips:>3}/{tot} ({flips / tot:>4.0%})")
 
 
+def _kappa(pairs: list[tuple[int, int]]) -> float:
+    """Cohen's kappa: agreement above what the two marginals produce by chance.
+
+    p_o is raw agreement; p_e is the agreement two independent raters with these
+    same marginal distributions would reach by luck. kappa = (p_o - p_e)/(1 - p_e):
+    0 means "no better than chance", 1 means perfect. It matters here because a
+    judge that says +1 56% of the time agrees with itself often by luck alone.
+    """
+    if not pairs:
+        return float("nan")
+    n = len(pairs)
+    p_o = sum(1 for a, b in pairs if a == b) / n
+    cats = sorted({v for p in pairs for v in p})
+    ma = collections.Counter(a for a, _ in pairs)
+    mb = collections.Counter(b for _, b in pairs)
+    p_e = sum((ma[c] / n) * (mb[c] / n) for c in cats)
+    return float("nan") if p_e == 1 else (p_o - p_e) / (1 - p_e)
+
+
+def _krippendorff_ordinal(pairs: list[tuple[int, int]]) -> float:
+    """Krippendorff's alpha with a squared-distance (interval) metric.
+
+    Unlike kappa, distance-aware: a -1 vs +1 disagreement costs 4x a 0 vs +1
+    disagreement, which matches how we read the scale (a sign flip is worse
+    than a hedge). alpha = 1 - D_o/D_e, observed vs expected squared distance.
+    """
+    if not pairs:
+        return float("nan")
+    vals = [v for p in pairs for v in p]
+    n = len(vals)
+    d_o = sum((a - b) ** 2 for a, b in pairs) * 2 / len(pairs) / 2  # mean over ordered pairs
+    d_e = sum((a - b) ** 2 for a in vals for b in vals) / (n * (n - 1))
+    return float("nan") if d_e == 0 else 1 - (d_o / d_e)
+
+
+def stage_grader(con) -> None:
+    """Grader repeatability: the same judge, the same response, graded twice.
+
+    This isolates the one variance component the run-repeat experiment
+    confounds. Within-orientation disagreement (two fresh generations) is
+    generation noise PLUS grader noise; this is grader noise alone, because the
+    response text is byte-identical between rounds. Whatever disagreement
+    remains here is the judge's own instability.
+    """
+    rows = con.execute(
+        "SELECT g.response_id rid, g.grader_model gm, g.grade_round rnd, g.score sc, "
+        "       r.model, r.orientation "
+        "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
+        "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
+    ).fetchall()
+    rounds = sorted({r["rnd"] for r in rows})
+    print(f"\n{'=' * 74}\nGRADER REPEATABILITY  ({EXPERIMENT}, rounds={rounds})\n{'=' * 74}")
+    if len(rounds) < 2:
+        print("need at least 2 grade rounds; run --stage grade --grade-round 2 first")
+        return
+
+    by = collections.defaultdict(dict)   # (gm, rid) -> {round: score}
+    meta = {}
+    for r in rows:
+        by[(r["gm"], r["rid"])][r["rnd"]] = r["sc"]
+        meta[r["rid"]] = (r["model"], r["orientation"])
+
+    judges = sorted({k[0] for k in by})
+    print("\n1. TEST-RETEST — same judge, byte-identical response, graded twice")
+    print(f"   {'judge':<30}{'n':>6}{'agree':>8}{'kappa':>8}{'alpha':>8}{'sign flips':>12}")
+    judge_pairs = {}
+    for gm in judges:
+        pairs = [(v[rounds[0]], v[rounds[1]]) for k, v in by.items()
+                 if k[0] == gm and rounds[0] in v and rounds[1] in v]
+        judge_pairs[gm] = pairs
+        if not pairs:
+            continue
+        agree = sum(1 for a, b in pairs if a == b) / len(pairs)
+        flips = sum(1 for a, b in pairs if a != 0 and b != 0 and a != b)
+        print(f"   {gm:<30}{len(pairs):>6}{agree:>8.0%}{_kappa(pairs):>8.2f}"
+              f"{_krippendorff_ordinal(pairs):>8.2f}{flips:>12}")
+
+    print("\n   where the changes land (round 1 -> round 2):")
+    for gm in judges:
+        moves = collections.Counter((a, b) for a, b in judge_pairs[gm] if a != b)
+        if not moves:
+            continue
+        desc = ", ".join(f"{a:+d}->{b:+d}: {c}" for (a, b), c in
+                         sorted(moves.items(), key=lambda x: -x[1]))
+        print(f"   {gm}: {desc}")
+
+    # decomposition: subtract grader noise from the run-repeat noise floor
+    print("\n2. VARIANCE DECOMPOSITION (disagreement rates, per judge)")
+    print("   within-orientation run pairs = generation + grader;")
+    print("   test-retest = grader alone. Independence gives")
+    print("   P(disagree) = 1 - (1-p_gen)(1-p_grader), so p_gen backs out.")
+    gen_rows = con.execute(
+        "SELECT g.score sc, g.grader_model gm, r.model, r.question_key q, r.orientation o, "
+        "       r.run_index run "
+        "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
+        "WHERE r.experiment=? AND g.grader_id=? AND g.grade_round=1", (EXPERIMENT, GRADER_ID),
+    ).fetchall()
+    cond = collections.defaultdict(dict)
+    for r in gen_rows:
+        cond[(r["gm"], r["model"], r["q"], r["o"])][r["run"]] = r["sc"]
+    print(f"\n   {'judge':<30}{'run-pairs':>10}{'grader':>9}{'=> generation':>14}")
+    for gm in judges:
+        wp = []
+        for k, byrun in cond.items():
+            if k[0] != gm:
+                continue
+            rs = sorted(byrun)
+            for i in range(len(rs)):
+                for j in range(i + 1, len(rs)):
+                    wp.append((byrun[rs[i]], byrun[rs[j]]))
+        if not wp or not judge_pairs[gm]:
+            continue
+        p_both = sum(1 for a, b in wp if a != b) / len(wp)
+        p_grader = sum(1 for a, b in judge_pairs[gm] if a != b) / len(judge_pairs[gm])
+        # run-pair disagreement involves grader noise on BOTH sides; retest has it
+        # on one (relative to the other read). Keep the simple one-sided model and
+        # report it as a bound rather than a point estimate.
+        p_gen = 1 - (1 - p_both) / (1 - p_grader) if p_grader < 1 else float("nan")
+        print(f"   {gm:<30}{p_both:>10.0%}{p_grader:>9.0%}{max(0.0, p_gen):>13.0%}")
+    print("\n   (generation is a lower bound: the independence model charges grader")
+    print("    noise once, but a run-pair carries an independent grader draw on")
+    print("    each side, so some of what is labelled generation is still grader.)")
+
+
 def stage_report(con) -> None:
     rows = con.execute(
         "SELECT g.score, g.grader_model, r.orientation, r.model, r.question_key, "
         "       r.entity_a, r.entity_b, r.topic, r.run_index "
         "FROM order_bias_grades g JOIN order_bias_responses r ON r.id = g.response_id "
-        "WHERE r.experiment=? AND g.grader_id=?", (EXPERIMENT, GRADER_ID),
+        "WHERE r.experiment=? AND g.grader_id=? AND g.grade_round=1", (EXPERIMENT, GRADER_ID),
     ).fetchall()
     if not rows:
         print("\n[report] nothing graded yet")
@@ -670,11 +841,14 @@ def stage_report(con) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", choices=["collect", "grade", "report", "variance", "all"],
+    ap.add_argument("--stage", choices=["collect", "grade", "report", "variance", "grader", "all"],
                     default="all")
     ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
     ap.add_argument("--grader-models", default=",".join(DEFAULT_GRADER_MODELS))
     ap.add_argument("--questions", type=int, default=20)
+    ap.add_argument("--grade-round", type=int, default=1,
+                    help="Which grading pass this is; >1 re-grades the same responses "
+                         "with the same judges, for grader repeatability")
     ap.add_argument("--runs", default="1,2,3",
                     help="Comma-separated run indices to collect (repeat generations)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -710,11 +884,13 @@ def main() -> int:
         if args.stage in ("collect", "all"):
             stage_collect(con, items, models, runs, args.workers, args.dry_run)
         if args.stage in ("grade", "all"):
-            stage_grade(con, grader_models, args.workers, args.dry_run)
+            stage_grade(con, grader_models, args.grade_round, args.workers, args.dry_run)
         if args.stage in ("report", "all") and not args.dry_run:
             stage_report(con)
         if args.stage in ("variance", "all") and not args.dry_run:
             stage_variance(con)
+        if args.stage == "grader" and not args.dry_run:
+            stage_grader(con)
     finally:
         con.close()
     return 0

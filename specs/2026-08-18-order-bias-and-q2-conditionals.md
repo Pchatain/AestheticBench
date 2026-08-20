@@ -193,6 +193,53 @@ at exactly 13/160 — so majority voting removes some hedge-noise but none of th
 order effect. The 13 flips that survive voting still go 13/0 toward the first
 slot.
 
+### Grader repeatability: splitting the noise floor (2026-08-20)
+
+The 23% noise floor above confounds two things: the subject model writing a
+different answer, and the judge scoring the same answer differently. Round 2
+of grading — the same 480 responses, byte-identical, re-scored by the same two
+judges — isolates the second. (`order_bias_grades` gained a `grade_round`
+column, same rebuild migration as `run_index`; all analyses of record pin
+`grade_round=1`.)
+
+**Test-retest, same judge, identical text (n=480 each):**
+
+| judge | agree | Cohen's κ | Krippendorff's α (ordinal) | sign flips |
+| --- | --- | --- | --- | --- |
+| gpt-5.2 | 90% | 0.85 | 0.80 | 32 |
+| claude-sonnet-4.5 | 90% | 0.84 | 0.79 | 21 |
+
+Both judges are ~90% repeatable — κ ≈ 0.85 says that holds up after
+discounting chance agreement from the skewed marginals. Two findings inside
+the disagreements:
+
+- **When a judge changes its mind it often flips sign outright** (gpt-5.2:
+  32 of 48 changes are −1↔+1 on identical text). These are presumably
+  responses whose verdict is genuinely ambiguous to read.
+- **Judge noise is direction-symmetric** — gpt-5.2's sign flips split 16/16,
+  sonnet's 11/10. That is the property the flip-direction test leans on:
+  grader noise cannot manufacture a directional result.
+
+**Decomposition.** Treating generation and grading as independent Bernoulli
+disagreement sources, P(disagree) = 1 − (1−p_gen)(1−p_grader):
+
+| judge | run-pair disagreement | grader alone | ⇒ generation (lower bound) |
+| --- | --- | --- | --- |
+| gpt-5.2 | 21% | 10% | 13% |
+| claude-sonnet-4.5 | 25% | 10% | 17% |
+
+So of the ~23% "noise floor", roughly **10 points are the judge** and
+**13–17 points the subject model** — closer to half-and-half than the
+generation-dominant picture the run-repeat experiment suggested on its own.
+The generation figure is a lower bound: a run-pair carries an independent
+grader draw on each side, so the simple model still charges some grader noise
+to generation.
+
+**The order-bias result replicates across grading rounds.** Round 1: 124:1
+toward the first slot. Round 2, an independent re-read of the same responses:
+128:3. Both p ≈ 2×10⁻¹². Nothing about the headline finding depends on which
+grading pass you use.
+
 ### What this means for the benchmark
 
 - **Single-sample verdicts carry ~23% noise on q2.** Any per-model number from

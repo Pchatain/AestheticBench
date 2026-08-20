@@ -241,3 +241,40 @@ class TestMigration:
         con = ob.connect(db)
         assert con.execute("SELECT count(*) FROM order_bias_responses").fetchone()[0] == 1
         con.close()
+
+
+class TestKappa:
+    def test_perfect_agreement_is_1(self):
+        assert ob._kappa([(1, 1), (0, 0), (-1, -1)] * 10) == 1.0
+
+    def test_chance_level_is_0(self):
+        """Two raters flipping independent fair coins over {0,1}: p_o = p_e = 0.5."""
+        pairs = [(0, 0), (0, 1), (1, 0), (1, 1)] * 25
+        assert abs(ob._kappa(pairs)) < 1e-9
+
+    def test_the_kappa_paradox(self):
+        """90% raw agreement can be WORSE than chance when marginals are skewed.
+
+        Both raters say +1 on 95% of items, so chance alone produces 90.5%
+        agreement — the observed 90% lands just below it and kappa goes
+        slightly negative. This is exactly why raw agreement cannot be the
+        headline number for a grader that says +1 most of the time.
+        """
+        pairs = [(1, 1)] * 90 + [(1, 0)] * 5 + [(0, 1)] * 5
+        k = ob._kappa(pairs)
+        assert -0.1 < k < 0
+
+    def test_empty_is_nan(self):
+        assert ob._kappa([]) != ob._kappa([])
+
+
+class TestKrippendorffOrdinal:
+    def test_perfect_agreement_is_1(self):
+        assert ob._krippendorff_ordinal([(1, 1), (-1, -1)] * 5) == 1.0
+
+    def test_sign_flip_costs_more_than_hedge(self):
+        """The metric must be distance-aware: -1 vs +1 is a worse miss than 0 vs +1."""
+        base = [(1, 1), (0, 0), (-1, -1)] * 20
+        with_hedge = ob._krippendorff_ordinal(base + [(1, 0)])
+        with_flip = ob._krippendorff_ordinal(base + [(1, -1)])
+        assert with_flip < with_hedge < 1.0
