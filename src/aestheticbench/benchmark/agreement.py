@@ -9,7 +9,9 @@ from typing import Optional
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sklearn.metrics import cohen_kappa_score, confusion_matrix
+from sklearn.metrics import confusion_matrix
+
+from .stats import kappa as cohen_kappa_score
 
 from ..store.database import AestheticBenchDB
 from .rubric import SPECS

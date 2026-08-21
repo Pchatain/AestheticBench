@@ -1,19 +1,15 @@
 """Tests for the order-bias experiment harness.
 
+The agreement statistics it uses live in benchmark.stats, tested in
+test_stats.py — here only the experiment-specific logic is pinned.
+
 The load-bearing piece is `_canonical`. If its sign convention is backwards the
 report turns perfect consistency into a 100% flip rate and vice versa — a wrong
 answer that looks exactly like a real finding, so it is pinned here explicitly
 rather than left to the report to reveal.
 """
 
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
-sys.path.insert(0, str(REPO_ROOT / "src"))
-
-import order_bias as ob
+from aestheticbench.benchmark import order_bias as ob
 
 
 class TestCanonical:
@@ -109,62 +105,6 @@ class TestLoadItems:
         assert (item.entity_a, item.entity_b) == ("First", "Second")
 
 
-class TestBinomP:
-    def test_even_split_is_not_significant(self):
-        assert ob._binom_p(50, 100) > 0.9
-
-    def test_lopsided_split_is_significant(self):
-        assert ob._binom_p(90, 100) < 0.001
-
-    def test_empty_is_nan(self):
-        assert ob._binom_p(0, 0) != ob._binom_p(0, 0)  # nan != nan
-
-
-class TestMajority:
-    """Collapsing repeat generations of one condition into a single verdict."""
-
-    def test_unanimous(self):
-        assert ob._majority([1, 1, 1]) == 1
-        assert ob._majority([-1, -1, -1]) == -1
-        assert ob._majority([0, 0, 0]) == 0
-
-    def test_two_one_split_takes_the_two(self):
-        assert ob._majority([1, 1, 0]) == 1
-        assert ob._majority([-1, -1, 1]) == -1
-        assert ob._majority([0, 0, 1]) == 0
-
-    def test_three_way_split_is_ambivalent(self):
-        assert ob._majority([1, 0, -1]) == 0
-
-    def test_even_split_between_sides_is_ambivalent(self):
-        """A 1-1 split between +1 and -1 is exactly 'no stable view'.
-
-        Picking a side here would manufacture a verdict the samples do not
-        support, and would inflate the stable-commit rate.
-        """
-        assert ob._majority([1, -1]) == 0
-
-    def test_single_sample_passes_through(self):
-        assert ob._majority([1]) == 1
-
-
-class TestDisagreementRate:
-    def test_identical_pairs_never_disagree(self):
-        assert ob._disagreement_rate([(1, 1), (0, 0), (-1, -1)]) == (0.0, 0.0)
-
-    def test_sign_flip_counts_as_both(self):
-        any_d, flip = ob._disagreement_rate([(1, -1)])
-        assert any_d == 1.0 and flip == 1.0
-
-    def test_commit_to_hedge_is_disagreement_but_not_a_flip(self):
-        any_d, flip = ob._disagreement_rate([(1, 0)])
-        assert any_d == 1.0 and flip == 0.0
-
-    def test_empty_is_nan(self):
-        a, f = ob._disagreement_rate([])
-        assert a != a and f != f
-
-
 class TestMigration:
     """The pre-run_index table must gain the column without losing grades."""
 
@@ -243,38 +183,3 @@ class TestMigration:
         con.close()
 
 
-class TestKappa:
-    def test_perfect_agreement_is_1(self):
-        assert ob._kappa([(1, 1), (0, 0), (-1, -1)] * 10) == 1.0
-
-    def test_chance_level_is_0(self):
-        """Two raters flipping independent fair coins over {0,1}: p_o = p_e = 0.5."""
-        pairs = [(0, 0), (0, 1), (1, 0), (1, 1)] * 25
-        assert abs(ob._kappa(pairs)) < 1e-9
-
-    def test_the_kappa_paradox(self):
-        """90% raw agreement can be WORSE than chance when marginals are skewed.
-
-        Both raters say +1 on 95% of items, so chance alone produces 90.5%
-        agreement — the observed 90% lands just below it and kappa goes
-        slightly negative. This is exactly why raw agreement cannot be the
-        headline number for a grader that says +1 most of the time.
-        """
-        pairs = [(1, 1)] * 90 + [(1, 0)] * 5 + [(0, 1)] * 5
-        k = ob._kappa(pairs)
-        assert -0.1 < k < 0
-
-    def test_empty_is_nan(self):
-        assert ob._kappa([]) != ob._kappa([])
-
-
-class TestKrippendorffOrdinal:
-    def test_perfect_agreement_is_1(self):
-        assert ob._krippendorff_ordinal([(1, 1), (-1, -1)] * 5) == 1.0
-
-    def test_sign_flip_costs_more_than_hedge(self):
-        """The metric must be distance-aware: -1 vs +1 is a worse miss than 0 vs +1."""
-        base = [(1, 1), (0, 0), (-1, -1)] * 20
-        with_hedge = ob._krippendorff_ordinal(base + [(1, 0)])
-        with_flip = ob._krippendorff_ordinal(base + [(1, -1)])
-        assert with_flip < with_hedge < 1.0
