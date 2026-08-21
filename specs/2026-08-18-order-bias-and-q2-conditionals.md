@@ -64,7 +64,7 @@ explanations and the benchmark could not tell them apart:
 1. the questions are written with the "obvious" winner named first, or
 2. models favour whatever they read first.
 
-`scripts/order_bias.py` separates them by asking every sampled question twice —
+`aestheticbench.benchmark.order_bias` separates them by asking every sampled question twice —
 once as written, once with the two `[bracketed]` entities swapped — and grading
 both on `q2` alone.
 
@@ -250,7 +250,7 @@ grading pass you use.
   favours whichever entity the question author put first. A single-order run
   bakes the author's ordering into the model's score.
 - **Report the canonical verdict, not the raw one.** `_canonical()` in the
-  script is the conversion; getting its sign backwards turns perfect
+  module is the conversion; getting its sign backwards turns perfect
   consistency into a 100% flip rate, which is why it is pinned by tests.
 - **Self-consistency and order-robustness are separate model properties.**
   grok is high on the first and low on the second; deepseek is the reverse. The
@@ -259,11 +259,11 @@ grading pass you use.
 ## Reproducing
 
 ```sh
-uv run --env-file .env.local python scripts/order_bias.py --dry-run
-uv run --env-file .env.local python scripts/order_bias.py --stage collect
-uv run --env-file .env.local python scripts/order_bias.py --stage grade
-uv run --env-file .env.local python scripts/order_bias.py --stage report
-uv run --env-file .env.local python scripts/order_bias.py --stage variance
+uv run python -m aestheticbench.benchmark.order_bias --dry-run
+uv run python -m aestheticbench.benchmark.order_bias --stage collect
+uv run python -m aestheticbench.benchmark.order_bias --stage grade
+uv run python -m aestheticbench.benchmark.order_bias --stage report
+uv run python -m aestheticbench.benchmark.order_bias --stage variance
 ```
 
 `--runs 1,2,3` is the default; `--stage collect` only fetches what is missing,
